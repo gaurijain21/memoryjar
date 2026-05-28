@@ -1,27 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Users, Crown, Trash2, LogOut, Check, Link2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
 import { deleteGroup, leaveGroup, removeMember } from "@/lib/groups";
+import { trackButtonClick, trackEvent } from "@/lib/analytics";
 import type { Group } from "@/types/memory";
 
 export function ViewGroupsPage() {
+  const router = useRouter();
   const { user, groups, setCurrentPage, setViewMode } = useApp();
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState<string | null>(null);
   const [copiedGroupId, setCopiedGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [locallyRemovedMembers, setLocallyRemovedMembers] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    trackEvent("view_groups_opened");
+  }, []);
 
   const handleGroupMemories = (group: Group) => {
+    trackEvent("group_memories_opened", { group_id: group.id });
+    trackEvent("group_detail_view", { group_id: group.id });
     sessionStorage.setItem("memoryJarPreviousPage", "view-groups");
     setViewMode(`group-${group.id}`);
     setCurrentPage("edit-memories");
   };
 
   const handleCopyLink = async (group: Group) => {
+    trackButtonClick("copy_group_invite_link", "view_groups", { group_id: group.id });
     const link = `${window.location.origin}/join/${group.joinCode}`;
     try {
       await navigator.clipboard.writeText(link);
@@ -71,6 +82,7 @@ export function ViewGroupsPage() {
 
     try {
       await deleteGroup(user.uid, group.id);
+      trackEvent("group_deleted", { group_id: group.id });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete group");
     } finally {
@@ -80,6 +92,10 @@ export function ViewGroupsPage() {
 
   const handleRemoveMember = async (group: Group, memberUid: string, memberName: string) => {
     if (!user) return;
+    if (group.ownerId !== user.uid) {
+      setError("Only the owner can remove members.");
+      return;
+    }
     if (memberUid === group.ownerId) {
       setError("The owner cannot be removed.");
       return;
@@ -95,6 +111,11 @@ export function ViewGroupsPage() {
     setError(null);
     try {
       await removeMember(user.uid, group.id, memberUid);
+      trackEvent("member_removed", { group_id: group.id });
+      setLocallyRemovedMembers((current) => ({
+        ...current,
+        [group.id]: [...(current[group.id] ?? []), memberUid],
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove member");
     }
@@ -105,7 +126,10 @@ export function ViewGroupsPage() {
       <div className="page-header">
         <button 
           className="back-button" 
-          onClick={() => setCurrentPage("main")} 
+          onClick={() => {
+            setCurrentPage("main");
+            router.replace("/");
+          }} 
           type="button"
           aria-label="Back"
         >
@@ -168,7 +192,10 @@ export function ViewGroupsPage() {
                       </button>
                       <button
                         className="group-action-button"
-                        onClick={() => setError("Member editing is coming soon. Owners can remove members below.")}
+                        onClick={() => {
+                          setError(null);
+                          setExpandedGroupId(group.id);
+                        }}
                         type="button"
                       >
                         Edit Members
@@ -195,15 +222,20 @@ export function ViewGroupsPage() {
                     <div className="group-members-section">
                       <h4>Members</h4>
                       <div className="group-members-list">
-                        {Object.values(group.members).filter(Boolean).map((member) => {
+                        {Object.values(group.members)
+                          .filter(Boolean)
+                          .filter((member) => !(locallyRemovedMembers[group.id] ?? []).includes(member.uid))
+                          .map((member) => {
                           const isGroupOwner = member.uid === group.ownerId;
                           const memberLabel = member.displayName || member.email || "Member";
+                          const canCurrentUserRemove = isOwner && !isGroupOwner && member.uid !== user?.uid;
 
                           return (
                             <div key={member.uid} className="group-member">
                               <UserAvatar
                                 className="member-avatar"
                                 email={member.email}
+                                id={member.uid}
                                 name={member.displayName}
                                 photoURL={member.photoURL}
                               />
@@ -219,22 +251,21 @@ export function ViewGroupsPage() {
                                 </div>
                                 {member.email ? <span className="member-email">{member.email}</span> : null}
                               </div>
-                              <button
-                                className="remove-member-button"
-                                disabled={isGroupOwner || member.uid === user?.uid}
-                                onClick={() => handleRemoveMember(group, member.uid, memberLabel)}
-                                type="button"
-                                aria-label={`Remove ${memberLabel}`}
-                                title={
-                                  isGroupOwner
-                                    ? "The owner cannot be removed"
-                                    : member.uid === user?.uid
-                                      ? "Use Leave Group to remove yourself"
-                                      : `Remove ${memberLabel}`
-                                }
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              {isOwner && !isGroupOwner && member.uid !== user?.uid ? (
+                                <button
+                                  className="remove-member-button"
+                                  onClick={() => handleRemoveMember(group, member.uid, memberLabel)}
+                                  type="button"
+                                  aria-label={`Remove ${memberLabel}`}
+                                  title={
+                                    canCurrentUserRemove
+                                      ? `Remove ${memberLabel}`
+                                      : "Only the owner can remove members"
+                                  }
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              ) : null}
                             </div>
                           );
                         })}

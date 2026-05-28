@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { type CSSProperties, useCallback, useMemo, useRef } from "react";
 import { GoogleMap, Marker, OverlayView, useJsApiLoader } from "@react-google-maps/api";
 import { Compass, LocateFixed, Minus, Plus } from "lucide-react";
 import { getReadableLocationName } from "@/lib/locationText";
@@ -14,6 +14,19 @@ const worldBounds = {
   west: -180,
   east: 180,
 };
+const personalPinColor = "#f6c85f";
+const groupPinColors = ["#6cc7f5", "#8f7cff", "#3ddc97", "#ff8f70", "#d783ff", "#4fd1c5"];
+
+function getGroupPinColor(groupId?: string | null) {
+  if (!groupId) return personalPinColor;
+
+  let hash = 0;
+  for (let index = 0; index < groupId.length; index += 1) {
+    hash = (hash + groupId.charCodeAt(index) * (index + 1)) % groupPinColors.length;
+  }
+
+  return groupPinColors[hash];
+}
 
 type MemoryMapProps = {
   memories: Memory[];
@@ -49,6 +62,22 @@ export function MemoryMap({
   });
 
   const isEveryoneView = viewMode === "everyone";
+  const draftPinIcon = useMemo(() => {
+    if (!isLoaded || typeof window === "undefined" || !window.google) return undefined;
+
+    const svg = encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">
+        <path fill="#f6c85f" stroke="#fff4cc" stroke-width="2" d="M17 1C8.2 1 1 8.2 1 17c0 11.7 16 25 16 25s16-13.3 16-25C33 8.2 25.8 1 17 1Z"/>
+        <circle cx="17" cy="17" r="6.5" fill="#17130a"/>
+      </svg>`,
+    );
+
+    return {
+      anchor: new google.maps.Point(17, 44),
+      scaledSize: new google.maps.Size(34, 44),
+      url: `data:image/svg+xml;charset=UTF-8,${svg}`,
+    };
+  }, [isLoaded]);
 
   const markerGroups = useMemo(() => {
     const grouped = new Map<string, Memory[]>();
@@ -96,6 +125,7 @@ export function MemoryMap({
         lat,
         lng,
         locationName,
+        locationSource: "pin" as const,
       };
 
       onLocationSelected(selected);
@@ -120,9 +150,8 @@ export function MemoryMap({
   }
 
   return (
-    <div className={`map-wrap ${isPinDropMode ? "pin-drop-mode" : ""}`}>
+      <div className={`map-wrap ${isPinDropMode ? "pin-drop-mode" : ""}`}>
       <div className="space-vignette" />
-      {isPinDropMode ? <div className="pin-drop-hint">Click the map to drop a memory pin</div> : null}
       <div className="map-controls" aria-label="Map controls">
         <button
           aria-label="Compass"
@@ -195,28 +224,15 @@ export function MemoryMap({
       >
         {markerGroups.map(({ memory, count }) => (
           <OverlayView
-            getPixelPositionOffset={(width, height) => ({
-              x: -(width / 2),
-              y: -height,
-            })}
+            getPixelPositionOffset={() => ({ x: 0, y: 0 })}
             key={memory.id}
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
             position={{ lat: memory.lat, lng: memory.lng }}
           >
-            {isEveryoneView ? (
-              <button
-                className="aggregate-pin"
-                onClick={() => focusMemory(memory)}
-                type="button"
-                title={`${count} ${count === 1 ? "memory" : "memories"}${
-                  getReadableLocationName(memory.locationName)
-                    ? ` at ${getReadableLocationName(memory.locationName)}`
-                    : ""
-                }`}
-              >
-                <span className="aggregate-count">{count}</span>
-              </button>
-            ) : (
+            <div
+              className="marker-anchor marker-anchor-pin"
+              style={{ "--pin-color": getGroupPinColor(memory.groupId) } as CSSProperties}
+            >
               <button
                 className={`memory-pin ${selectedMemory?.id === memory.id ? "active" : ""}`}
                 onClick={() => focusMemory(memory)}
@@ -230,7 +246,7 @@ export function MemoryMap({
                 )}
                 {count > 1 ? <b>{count}</b> : null}
               </button>
-            )}
+            </div>
           </OverlayView>
         ))}
         {isEveryoneView
@@ -239,24 +255,23 @@ export function MemoryMap({
 
               return (
                 <OverlayView
-                  getPixelPositionOffset={(width, height) => ({
-                    x: -(width / 2),
-                    y: -height,
-                  })}
+                  getPixelPositionOffset={() => ({ x: 0, y: 0 })}
                   key={marker.id}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                   position={{ lat: marker.lat, lng: marker.lng }}
                 >
-                  <button
-                    className={`aggregate-pin ${selectedAggregate?.id === marker.id ? "active" : ""}`}
-                    onClick={() => onSelectAggregate(marker)}
-                    title={`${marker.count} ${marker.count === 1 ? "memory" : "memories"}${
-                      locationName ? ` at ${locationName}` : ""
-                    }`}
-                    type="button"
-                  >
-                    <span className="aggregate-count">{marker.count}</span>
-                  </button>
+                  <div className="marker-anchor marker-anchor-circle">
+                    <button
+                      className={`aggregate-pin ${selectedAggregate?.id === marker.id ? "active" : ""}`}
+                      onClick={() => onSelectAggregate(marker)}
+                      title={`${marker.count} ${marker.count === 1 ? "memory" : "memories"}${
+                        locationName ? ` at ${locationName}` : ""
+                      }`}
+                      type="button"
+                    >
+                      <span className="aggregate-count">{marker.count}</span>
+                    </button>
+                  </div>
                 </OverlayView>
               );
             })
@@ -264,6 +279,7 @@ export function MemoryMap({
         {draftLocation ? (
           <Marker
             draggable
+            icon={draftPinIcon}
             onDragEnd={(event) => {
               if (!event.latLng) return;
               onLocationSelected({

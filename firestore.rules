@@ -16,6 +16,22 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/groups/$(groupId)).data.ownerId == request.auth.uid;
     }
 
+    function onlyGroupMembershipChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "memberIds",
+        "members"
+      ]);
+    }
+
+    function isJoiningSelf() {
+      return signedIn()
+        && !(request.auth.uid in resource.data.memberIds)
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+        && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+        && request.resource.data.members[request.auth.uid].uid == request.auth.uid;
+    }
+
     match /users/{userId}/{document=**} {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
@@ -30,16 +46,10 @@ service cloud.firestore {
       allow update: if signedIn()
         && request.resource.data.ownerId == resource.data.ownerId
         && resource.data.ownerId in request.resource.data.memberIds
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "memberIds",
-          "members"
-        ])
+        && onlyGroupMembershipChanged()
         && (
-          request.auth.uid in resource.data.memberIds
-          || (
-            !(request.auth.uid in resource.data.memberIds)
-            && request.auth.uid in request.resource.data.memberIds
-          )
+          resource.data.ownerId == request.auth.uid
+          || isJoiningSelf()
         );
 
       allow delete: if isGroupOwner(groupId);
@@ -56,6 +66,11 @@ service cloud.firestore {
           "lat",
           "lng",
           "locationName",
+          "locationSource",
+          "placeId",
+          "placeName",
+          "formattedAddress",
+          "placePhotoReference",
           "count",
           "createdAt",
           "updatedAt"

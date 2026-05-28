@@ -8,6 +8,7 @@ import { formatMemoryDate } from "@/lib/formatDate";
 import { getReadableLocationName } from "@/lib/locationText";
 import { subscribeToMemories, deleteMemory } from "@/lib/memories";
 import { subscribeToGroupMemories, deleteGroupMemory } from "@/lib/groups";
+import { trackEvent, trackMemoryDeleted } from "@/lib/analytics";
 import type { Memory } from "@/types/memory";
 
 export function EditMemoriesPage() {
@@ -67,8 +68,10 @@ export function EditMemoriesPage() {
     try {
       if (isGroupView && groupId) {
         await deleteGroupMemory(groupId, memory);
+        trackMemoryDeleted("group");
       } else {
         await deleteMemory(user.uid, memory);
+        trackMemoryDeleted("my_memories");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete memory");
@@ -78,24 +81,18 @@ export function EditMemoriesPage() {
   };
 
   const handleEdit = (memory: Memory) => {
+    trackEvent("edit_memory_opened", {
+      source_type: isGroupView ? "group" : "my_memories",
+      group_id: groupId,
+    });
     setMemoryToEdit(memory);
     setCurrentPage("main");
   };
 
   const handleBack = () => {
-    const previousPage = sessionStorage.getItem("memoryJarPreviousPage");
-    if (previousPage === "view-groups") {
-      sessionStorage.removeItem("memoryJarPreviousPage");
-      setCurrentPage("view-groups");
-      return;
-    }
-
-    if (window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    setCurrentPage(isGroupView ? "view-groups" : "main");
+    sessionStorage.removeItem("memoryJarPreviousPage");
+    setCurrentPage("main");
+    router.replace("/");
   };
 
   const pageTitle = isGroupView && currentGroup 

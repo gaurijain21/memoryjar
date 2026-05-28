@@ -6,6 +6,11 @@ export type Memory = {
   description: string;
   date: string;
   locationName: string;
+  placeId?: string | null;
+  placeName?: string | null;
+  formattedAddress?: string | null;
+  placePhotoReference?: string | null;
+  locationSource?: "search" | "pin";
   lat: number;
   lng: number;
   photoUrls: string[];
@@ -21,6 +26,11 @@ export type SelectedLocation = {
   locationName: string;
   lat: number;
   lng: number;
+  placeId?: string | null;
+  placeName?: string | null;
+  formattedAddress?: string | null;
+  placePhotoReference?: string | null;
+  locationSource?: "search" | "pin";
 };
 
 // Group types
@@ -47,7 +57,7 @@ export type GroupInput = {
 };
 
 // View mode types
-export type ViewMode = "my-memories" | "everyone" | `group-${string}`;
+export type ViewMode = "all-memories" | "my-memories" | "everyone" | `group-${string}`;
 
 // Page types for internal navigation
 export type AppPage = "main" | "edit-memories" | "view-groups" | "personal-info";
@@ -59,4 +69,9 @@ export type AggregateMarker = {
   lng: number;
   count: number;
   locationName: string;
+  placeId?: string | null;
+  placeName?: string | null;
+  formattedAddress?: string | null;
+  placePhotoReference?: string | null;
+  locationSource?: "search" | "pin";
 };

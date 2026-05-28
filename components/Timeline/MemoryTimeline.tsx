@@ -21,7 +21,18 @@ export function MemoryTimeline({
   onRangeChange,
 }: MemoryTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const sorted = [...memories].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = useMemo(() => {
+    const seen = new Set<string>();
+
+    return [...memories]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .filter((memory) => {
+        const stableKey = `${memory.groupId ?? "private"}:${memory.id}:${memory.photoUrls[0] ?? "no-photo"}`;
+        if (seen.has(stableKey)) return false;
+        seen.add(stableKey);
+        return true;
+      });
+  }, [memories]);
   const selected = sorted[rangeIndex];
   const years = useMemo(() => {
     const memoryYears = sorted.map((memory) => Number(memory.date.split("-")[0])).filter(Boolean);
@@ -54,7 +65,7 @@ export function MemoryTimeline({
       </div>
       <div className="year-row">
         <span>{years.start}</span>
-        <strong>{years.current}</strong>
+        <span>{years.current}</span>
         <span>{years.end}</span>
       </div>
       <input

@@ -14,6 +14,7 @@ import {
   writeBatch,
   arrayUnion,
   arrayRemove,
+  deleteField,
 } from "firebase/firestore";
 import {
   deleteObject,
@@ -23,6 +24,13 @@ import {
 } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import type { Group, GroupInput, GroupMember, Memory, MemoryInput } from "@/types/memory";
+
+type JoinGroupResult = {
+  success: boolean;
+  groupId?: string;
+  alreadyMember?: boolean;
+  error?: string;
+};
 
 // Collection references
 const groupsCollection = collection(db, "groups");
@@ -123,14 +131,20 @@ export async function joinGroupByCode(
   uid: string,
   userInfo: { displayName: string; email?: string | null; photoURL: string | null },
   joinCode: string
-): Promise<{ success: boolean; groupId?: string; error?: string }> {
+): Promise<JoinGroupResult> {
+  console.info("[MemoryJar invite] joinGroupByCode lookup", { joinCode, uid });
   const group = await getGroupByJoinCode(joinCode);
   if (!group) {
+    console.error("[MemoryJar invite] joinGroupByCode group not found", { joinCode });
     return { success: false, error: "Group not found" };
   }
 
   if (group.memberIds.includes(uid)) {
-    return { success: true, groupId: group.id }; // Already a member
+    console.info("[MemoryJar invite] joinGroupByCode already member", {
+      groupId: group.id,
+      uid,
+    });
+    return { success: true, groupId: group.id, alreadyMember: true };
   }
 
   const memberData: GroupMember = {
@@ -141,12 +155,21 @@ export async function joinGroupByCode(
     joinedAt: serverTimestamp(),
   };
 
-  await updateDoc(groupDoc(group.id), {
-    memberIds: arrayUnion(uid),
-    [`members.${uid}`]: memberData,
-  });
+  try {
+    await updateDoc(groupDoc(group.id), {
+      memberIds: arrayUnion(uid),
+      [`members.${uid}`]: memberData,
+    });
+  } catch (error) {
+    console.error("[MemoryJar invite] joinGroupByCode Firestore update failed", error);
+    throw error;
+  }
 
-  return { success: true, groupId: group.id };
+  console.info("[MemoryJar invite] joinGroupByCode member added", {
+    groupId: group.id,
+    uid,
+  });
+  return { success: true, groupId: group.id, alreadyMember: false };
 }
 
 // Leave a group
@@ -160,11 +183,11 @@ export async function leaveGroup(uid: string, groupId: string): Promise<void> {
 
   await updateDoc(groupDoc(groupId), {
     memberIds: arrayRemove(uid),
-    [`members.${uid}`]: null,
+    [`members.${uid}`]: deleteField(),
   });
 }
 
-// Remove a member from a group. Members can remove non-owner members.
+// Remove a member from a group. Only owners can remove non-owner members.
 export async function removeMember(
   requestingUid: string,
   groupId: string,
@@ -173,12 +196,12 @@ export async function removeMember(
   const group = await getGroup(groupId);
   if (!group) throw new Error("Group not found");
   
-  if (!group.memberIds.includes(requestingUid)) {
-    throw new Error("Only group members can remove members");
+  if (group.ownerId !== requestingUid) {
+    throw new Error("Only the owner can remove members.");
   }
 
   if (memberUid === requestingUid) {
-    throw new Error("Use Leave Group to remove yourself");
+    throw new Error("The owner cannot remove themselves here.");
   }
   
   if (memberUid === group.ownerId) {
@@ -187,7 +210,7 @@ export async function removeMember(
 
   await updateDoc(groupDoc(groupId), {
     memberIds: arrayRemove(memberUid),
-    [`members.${memberUid}`]: null,
+    [`members.${memberUid}`]: deleteField(),
   });
 }
 

@@ -1,9 +1,9 @@
-import { initializeApp, getApps } from "firebase/app";
+import { getApp, initializeApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "demo-api-key",
   authDomain:
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "demo-memory-jar.firebaseapp.com",
@@ -15,9 +15,12 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
+// Local/dev checklist: Firebase Authentication must list localhost under
+// Authentication > Settings > Authorized domains. The authDomain should stay as
+// <project-id>.firebaseapp.com, never localhost.
+export const auth = getAuth(firebaseApp);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+export const db = getFirestore(firebaseApp);
+export const storage = getStorage(firebaseApp);

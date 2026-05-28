@@ -82,6 +82,11 @@ export function AddMemoryModal({
         locationName: locationName || location.locationName,
         lat: location.lat,
         lng: location.lng,
+        formattedAddress: location.formattedAddress ?? editingMemory?.formattedAddress ?? null,
+        locationSource: location.locationSource ?? editingMemory?.locationSource ?? "pin",
+        placeId: location.placeId ?? editingMemory?.placeId ?? null,
+        placeName: location.placeName ?? editingMemory?.placeName ?? null,
+        placePhotoReference: location.placePhotoReference ?? editingMemory?.placePhotoReference ?? null,
         photoUrls: photoUrlsToKeep,
         storagePaths: editingMemory?.storagePaths ?? [],
       },
@@ -95,8 +100,8 @@ export function AddMemoryModal({
       <form className={`memory-modal ${pinDropMode ? "pin-mode" : ""}`} onSubmit={handleSubmit}>
         <div className="modal-title-row">
           <div>
-            <p className="eyebrow">{editingMemory ? "Edit memory" : "Add a Memory"}</p>
-            <h2>{editingMemory ? editingMemory.title : "Save this place"}</h2>
+            <p className="eyebrow">{editingMemory ? "Edit memory" : "Capture life, drop a pin!"}</p>
+            <h2>{editingMemory ? editingMemory.title : "ADD MEMORY"}</h2>
           </div>
           <button aria-label="Close" className="icon-button" onClick={onClose} type="button">
             <X size={18} />
@@ -121,6 +126,7 @@ export function AddMemoryModal({
             <MousePointer2 size={16} />
             {pinDropMode ? "Click on the map" : "Drop pin on map"}
           </button>
+          <p className="drop-pin-mobile-note">Drop pin is available on desktop. Use search on mobile.</p>
         </div>
 
         {(selectedLocation || editingMemory) && locationName ? (
@@ -135,7 +141,7 @@ export function AddMemoryModal({
           <input
             maxLength={50}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Sunset in Lisbon"
+            placeholder="Late night beach drive"
             required
             value={title}
           />
@@ -146,7 +152,7 @@ export function AddMemoryModal({
           <textarea
             maxLength={150}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="A small note about what made this moment worth saving."
+            placeholder="We stayed here until midnight talking about life and eating fries."
             rows={2}
             value={description}
           />

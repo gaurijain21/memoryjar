@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { MapPinned, Plus, ChevronDown, User, Users, Edit3, LogOut } from "lucide-react";
+import Image from "next/image";
+import { Plus, ChevronDown, User, Users, Edit3, LogOut } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
+import { UserAvatar } from "@/components/UserAvatar";
 import { ViewModeDropdown } from "./ViewModeDropdown";
 import { CreateGroupModal } from "@/components/Groups/CreateGroupModal";
+import { trackButtonClick, trackEvent } from "@/lib/analytics";
 
 interface TopNavBarProps {
   onAddMemory: () => void;
@@ -39,6 +42,7 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
     setIsProfileMenuOpen(false);
     
     if (action === "logout") {
+      trackEvent("logout_clicked", { page: "top_ribbon" });
       signOut(auth);
       return;
     }
@@ -52,6 +56,8 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
   };
 
   const handleAddMemory = () => {
+    trackEvent("add_memory_clicked", { selected_view: viewMode });
+    trackButtonClick("add_memory", "top_ribbon", { selected_view: viewMode });
     if (!user) {
       requestLogin({ type: "add-memory" });
       return;
@@ -61,6 +67,7 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
 
   // Get view mode display text
   const getViewModeLabel = () => {
+    if (viewMode === "all-memories") return "All Memories";
     if (viewMode === "my-memories") return "My Memories";
     if (viewMode === "everyone") return "Everyone";
     if (viewMode.startsWith("group-")) {
@@ -75,7 +82,7 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
         {/* Left: Logo */}
         <div className="nav-brand" onClick={() => setCurrentPage("main")} role="button" tabIndex={0}>
           <div className="nav-brand-icon">
-            <MapPinned size={20} />
+            <Image alt="" height={32} src="/logomap.jpg" width={32} />
           </div>
           <span className="nav-brand-text">Memory Jar</span>
         </div>
@@ -107,6 +114,8 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
                 onClose={() => setIsViewDropdownOpen(false)}
                 onCreateGroup={() => {
                   setIsViewDropdownOpen(false);
+                  trackEvent("create_group_clicked", { selected_view: viewMode });
+                  trackButtonClick("create_group", "view_dropdown", { selected_view: viewMode });
                   if (!user) {
                     requestLogin({ type: "view-groups" });
                     return;
@@ -123,18 +132,21 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
           {user ? (
             <button
               className="profile-avatar-button"
-              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              onClick={() => {
+                const nextOpen = !isProfileMenuOpen;
+                setIsProfileMenuOpen(nextOpen);
+                if (nextOpen) trackEvent("profile_menu_opened", { selected_view: viewMode });
+              }}
               type="button"
               aria-label="Profile menu"
             >
-              {user.photoURL ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.photoURL} alt="" className="profile-avatar" />
-              ) : (
-                <div className="profile-avatar-placeholder">
-                  <User size={18} />
-                </div>
-              )}
+              <UserAvatar
+                className="profile-avatar"
+                email={user.email}
+                id={user.uid}
+                name={user.displayName}
+                photoURL={user.photoURL}
+              />
             </button>
           ) : (
             <button

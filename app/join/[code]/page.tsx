@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useRef, useState, use } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, signInWithRedirect, type User } from "firebase/auth";
-import { MapPinned, Users, Loader2 } from "lucide-react";
-import { auth, googleProvider } from "@/lib/firebase";
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { Users, Loader2 } from "lucide-react";
+import { auth } from "@/lib/firebase";
 import { getGroupByJoinCode, joinGroupByCode } from "@/lib/groups";
+import { trackEvent, trackGroupJoined } from "@/lib/analytics";
 
 interface JoinPageProps {
   params: Promise<{ code: string }>;
@@ -19,86 +21,139 @@ export default function JoinPage({ params }: JoinPageProps) {
   const [groupName, setGroupName] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [canRedirectToLogin, setCanRedirectToLogin] = useState(false);
+  const joinAttemptedRef = useRef(false);
 
   // Check auth state
   useEffect(() => {
     return onAuthStateChanged(auth, (currentUser) => {
+      console.info("[MemoryJar invite] join route auth state", {
+        code,
+        authLoading: false,
+        currentUserExists: Boolean(currentUser),
+        uid: currentUser?.uid ?? null,
+      });
       setUser(currentUser);
       setAuthReady(true);
+      window.setTimeout(() => setCanRedirectToLogin(true), 900);
     });
-  }, []);
+  }, [code]);
 
-  // Validate the group code after sign-in. Logged-out users see the invite prompt first.
+  // Keep the invite code through the Google redirect round-trip.
   useEffect(() => {
-    if (!authReady || !user) return;
+    if (code) {
+      trackEvent("join_invite_view", { invite_code_present: true });
+      sessionStorage.setItem("pendingInviteCode", code);
+      sessionStorage.setItem("postLoginRedirect", `/join/${code}`);
+      localStorage.setItem("pendingInviteCode", code);
+      console.info("[MemoryJar invite] join code found", {
+        code,
+        savedToSessionStorage: true,
+        savedToLocalStorage: true,
+      });
+    }
+  }, [code]);
 
-    async function validateCode() {
+  // Once Firebase has finished initializing, send logged-out users to login.
+  // Do not call Google sign-in from this page; the login button owns that action.
+  useEffect(() => {
+    if (!authReady || !canRedirectToLogin || user || error) return;
+    console.info("[MemoryJar invite] no current user after auth load, redirecting to login", {
+      code,
+      redirectDestination: `/login?inviteCode=${code}`,
+    });
+    router.replace(`/login?inviteCode=${encodeURIComponent(code)}`);
+  }, [authReady, canRedirectToLogin, code, error, router, user]);
+
+  useEffect(() => {
+    if (!authReady || !user || joinAttemptedRef.current) return;
+
+    const currentUser = user;
+    const inviteCode =
+      sessionStorage.getItem("pendingInviteCode") ||
+      localStorage.getItem("pendingInviteCode") ||
+      sessionStorage.getItem("pendingJoinCode") ||
+      code;
+    if (!inviteCode) {
+      console.error("[MemoryJar invite] pending invite code missing on join route");
+      setError("This invite link is invalid or has expired.");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function acceptInvite() {
+      joinAttemptedRef.current = true;
+      setIsJoining(true);
+      setError(null);
+      console.info("[MemoryJar invite] direct join started", {
+        inviteCode,
+        uid: currentUser.uid,
+      });
+
       try {
-        const group = await getGroupByJoinCode(code);
-        if (group) {
-          setGroupName(group.name);
-        } else {
-          setError("This invite link is invalid or has expired.");
+        const group = await getGroupByJoinCode(inviteCode);
+        console.info("[MemoryJar invite] group lookup finished", {
+          inviteCode,
+          groupFound: Boolean(group),
+          groupId: group?.id ?? null,
+        });
+        if (!group) {
+          if (!cancelled) {
+            setError("This invite link is invalid or has expired.");
+            setIsJoining(false);
+          }
+          return;
         }
-      } catch {
-        setError("Failed to validate invite link.");
-      }
-    }
-    validateCode();
-  }, [authReady, code, user]);
 
-  // Auto-join if user is already logged in
-  useEffect(() => {
-    if (authReady && user && groupName && !isJoining && !error) {
-      handleJoin();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady, user, groupName]);
+        if (!cancelled) setGroupName(group.name);
 
-  const handleSignIn = async () => {
-    setIsSigningIn(true);
-    setError(null);
-    try {
-      sessionStorage.setItem("pendingJoinCode", code);
-      await signInWithRedirect(auth, googleProvider);
-    } catch {
-      setError("Failed to sign in. Please try again.");
-      setIsSigningIn(false);
-    }
-  };
+        const result = await joinGroupByCode(
+          currentUser.uid,
+          {
+            displayName: currentUser.displayName ?? currentUser.email ?? "User",
+            email: currentUser.email,
+            photoURL: currentUser.photoURL,
+          },
+          inviteCode
+        );
 
-  const handleJoin = async () => {
-    if (!user) return;
+        if (cancelled) return;
 
-    setIsJoining(true);
-    setError(null);
+        if (result.success && result.groupId) {
+          console.info("[MemoryJar invite] direct join success", {
+            groupId: result.groupId,
+            alreadyMember: Boolean(result.alreadyMember),
+            redirectDestination: "/",
+          });
+          trackGroupJoined(result.groupId, result.alreadyMember);
+          sessionStorage.setItem("joinedGroupId", result.groupId);
+          sessionStorage.removeItem("pendingInviteCode");
+          sessionStorage.removeItem("pendingJoinCode");
+          sessionStorage.removeItem("postLoginRedirect");
+          localStorage.removeItem("pendingInviteCode");
+          router.replace("/");
+          return;
+        }
 
-    try {
-      const result = await joinGroupByCode(
-        user.uid,
-        {
-          displayName: user.displayName ?? user.email ?? "User",
-          email: user.email,
-          photoURL: user.photoURL,
-        },
-        code
-      );
-
-      if (result.success && result.groupId) {
-        // Store the group to select after redirect
-        sessionStorage.setItem("joinedGroupId", result.groupId);
-        sessionStorage.removeItem("pendingJoinCode");
-        router.push("/");
-      } else {
+        console.error("[MemoryJar invite] direct join failed", result);
         setError(result.error ?? "Failed to join group");
         setIsJoining(false);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[MemoryJar invite] direct join threw", err);
+          setError(err instanceof Error ? err.message : "Failed to join group");
+          setIsJoining(false);
+        }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to join group");
-      setIsJoining(false);
     }
-  };
+
+    acceptInvite();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, code, router, user]);
 
   // Loading state
   if (!authReady || (groupName && user && isJoining)) {
@@ -121,7 +176,7 @@ export default function JoinPage({ params }: JoinPageProps) {
         <div className="join-card">
           <div className="join-brand">
             <div className="join-brand-icon">
-              <MapPinned size={28} />
+              <Image alt="" height={36} src="/logomap.jpg" width={36} />
             </div>
             <h1>Memory Jar</h1>
           </div>
@@ -134,14 +189,14 @@ export default function JoinPage({ params }: JoinPageProps) {
     );
   }
 
-  // Not logged in - show sign in
+  // Not logged in - login redirect is in progress.
   if (!user) {
     return (
       <main className="join-page">
         <div className="join-card">
           <div className="join-brand">
             <div className="join-brand-icon">
-              <MapPinned size={28} />
+              <Image alt="" height={36} src="/logomap.jpg" width={36} />
             </div>
             <h1>Memory Jar</h1>
           </div>
@@ -156,14 +211,10 @@ export default function JoinPage({ params }: JoinPageProps) {
 
           {error && <div className="join-error">{error}</div>}
 
-          <button
-            className="primary-button"
-            onClick={handleSignIn}
-            disabled={isSigningIn}
-            type="button"
-          >
-            {isSigningIn ? "Signing in..." : "Sign in to Join"}
-          </button>
+          <div className="join-loading">
+            <Loader2 size={24} className="spinning" />
+            <span>Opening sign in...</span>
+          </div>
         </div>
       </main>
     );
@@ -175,7 +226,7 @@ export default function JoinPage({ params }: JoinPageProps) {
       <div className="join-card">
         <div className="join-brand">
           <div className="join-brand-icon">
-            <MapPinned size={28} />
+            <Image alt="" height={36} src="/logomap.jpg" width={36} />
           </div>
           <h1>Memory Jar</h1>
         </div>
@@ -192,7 +243,7 @@ export default function JoinPage({ params }: JoinPageProps) {
 
         <button
           className="primary-button"
-          onClick={handleJoin}
+          onClick={() => window.location.reload()}
           disabled={isJoining}
           type="button"
         >

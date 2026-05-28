@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 
 type UserAvatarProps = {
+  id?: string | null;
   name?: string | null;
   email?: string | null;
   photoURL?: string | null;
@@ -18,9 +19,33 @@ function getInitials(name?: string | null, email?: string | null) {
     .join("") || "U";
 }
 
-export function UserAvatar({ name, email, photoURL, className = "" }: UserAvatarProps) {
+const avatarColors = [
+  "#2f6fed",
+  "#8f7cff",
+  "#3ddc97",
+  "#f6c85f",
+  "#ff8f70",
+  "#d783ff",
+  "#4fd1c5",
+  "#ef5da8",
+];
+
+function getAvatarColor(seed: string) {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash + seed.charCodeAt(index) * (index + 1)) % avatarColors.length;
+  }
+  return avatarColors[hash];
+}
+
+export function UserAvatar({ id, name, email, photoURL, className = "" }: UserAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
   const initials = getInitials(name, email);
+  const seed = id || email || name || initials;
+  const style = useMemo(
+    () => ({ "--avatar-color": getAvatarColor(seed) }) as CSSProperties,
+    [seed],
+  );
 
   if (photoURL && !imageFailed) {
     return (
@@ -34,5 +59,9 @@ export function UserAvatar({ name, email, photoURL, className = "" }: UserAvatar
     );
   }
 
-  return <span className={`user-avatar initials-avatar ${className}`}>{initials}</span>;
+  return (
+    <span className={`user-avatar initials-avatar ${className}`} style={style}>
+      {initials}
+    </span>
+  );
 }

@@ -23,6 +23,13 @@ import {
   updateGroupMemory,
 } from "@/lib/groups";
 import { subscribeToMemoryLocationAggregates } from "@/lib/aggregates";
+import {
+  trackButtonClick,
+  trackEvent,
+  trackMemoryCreated,
+  trackMemoryEdited,
+  trackPhotoUploaded,
+} from "@/lib/analytics";
 import type { AggregateMarker, Memory, MemoryInput, SelectedLocation } from "@/types/memory";
 
 const MemoryMap = dynamic(
@@ -45,6 +52,7 @@ export function MemoryJarApp() {
     memoryToEdit,
     setMemoryToEdit,
     currentGroupId,
+    groups,
     setViewMode,
   } = useApp();
 
@@ -58,6 +66,26 @@ export function MemoryJarApp() {
   const [error, setError] = useState<string | null>(null);
   const [rangeIndex, setRangeIndex] = useState(0);
   const [isPinDropMode, setIsPinDropMode] = useState(false);
+
+  const sourceType = currentGroupId
+    ? "group"
+    : viewMode === "all-memories"
+      ? "all_memories"
+      : viewMode === "everyone"
+        ? "everyones_memories"
+        : "my_memories";
+
+  useEffect(() => {
+    if (!user || currentPage !== "main") return;
+    trackEvent("home_map_view", { selected_view: viewMode });
+  }, [currentPage, user, viewMode]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (currentPage === "personal-info") trackEvent("personal_information_view");
+    if (currentPage === "edit-memories") trackEvent("edit_memories_view", { selected_view: viewMode });
+    if (currentPage === "view-groups") trackEvent("view_groups_view");
+  }, [currentPage, user, viewMode]);
 
   // Subscribe to memories based on view mode
   useEffect(() => {
@@ -78,6 +106,56 @@ export function MemoryJarApp() {
     setAggregateMarkers([]);
     setSelectedAggregate(null);
 
+    if (viewMode === "all-memories") {
+      setSelectedMemory(null);
+      const memoryBuckets = new Map<string, Memory[]>();
+
+      const updateCombinedMemories = () => {
+        const combined = Array.from(memoryBuckets.values()).flat();
+        setMemories(combined);
+      };
+
+      const unsubscribers: Array<() => void> = [
+        subscribeToMemories(
+          user.uid,
+          (personalMemories) => {
+            memoryBuckets.set(
+              "my-memories",
+              personalMemories.map((memory) => ({
+                ...memory,
+                id: `private-${memory.id}`,
+                groupId: null,
+              })),
+            );
+            updateCombinedMemories();
+          },
+          (snapshotError) => setError(snapshotError.message),
+        ),
+      ];
+
+      groups.forEach((group) => {
+        unsubscribers.push(
+          subscribeToGroupMemories(
+            group.id,
+            (groupMemories) => {
+              memoryBuckets.set(
+                `group-${group.id}`,
+                groupMemories.map((memory) => ({
+                  ...memory,
+                  id: `group-${group.id}-${memory.id}`,
+                  groupId: group.id,
+                })),
+              );
+              updateCombinedMemories();
+            },
+            (snapshotError) => setError(snapshotError.message),
+          ),
+        );
+      });
+
+      return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    }
+
     if (viewMode === "my-memories") {
       return subscribeToMemories(
         user.uid,
@@ -94,7 +172,7 @@ export function MemoryJarApp() {
         (snapshotError) => setError(snapshotError.message),
       );
     }
-  }, [user, viewMode, currentGroupId, setSelectedMemory]);
+  }, [user, viewMode, currentGroupId, groups, setSelectedMemory]);
 
   // Handle joined group from session storage (after join page redirect)
   useEffect(() => {
@@ -109,11 +187,15 @@ export function MemoryJarApp() {
   useEffect(() => {
     if (user && pendingAction) {
       if (pendingAction.type === "add-memory") {
-        openAddModal();
+        trackEvent("add_memory_opened", { source_type: sourceType, selected_view: viewMode });
+        setEditingMemory(null);
+        setSelectedLocation(null);
+        setIsPinDropMode(false);
+        setIsModalOpen(true);
         setPendingAction(null);
       }
     }
-  }, [user, pendingAction, setPendingAction]);
+  }, [pendingAction, setPendingAction, sourceType, user, viewMode]);
 
   // Open edit modal only for explicit edit requests from management pages.
   useEffect(() => {
@@ -129,6 +211,7 @@ export function MemoryJarApp() {
   );
 
   const openAddModal = () => {
+    trackEvent("add_memory_opened", { source_type: sourceType, selected_view: viewMode });
     setEditingMemory(null);
     setSelectedLocation(null);
     setIsPinDropMode(false);
@@ -136,11 +219,20 @@ export function MemoryJarApp() {
   };
 
   const openEditModal = (memory: Memory) => {
+    trackEvent("edit_memory_opened", {
+      source_type: memory.groupId ? "group" : "my_memories",
+      group_id: memory.groupId,
+    });
     setEditingMemory(memory);
     setSelectedLocation({
       locationName: memory.locationName,
       lat: memory.lat,
       lng: memory.lng,
+      formattedAddress: memory.formattedAddress,
+      locationSource: memory.locationSource,
+      placeId: memory.placeId,
+      placeName: memory.placeName,
+      placePhotoReference: memory.placePhotoReference,
     });
     setIsPinDropMode(false);
     setIsModalOpen(true);
@@ -167,18 +259,28 @@ export function MemoryJarApp() {
         // Group memory
         if (editingMemory) {
           await updateGroupMemory(currentGroupId, editingMemory, input, photos, photoUrlsToKeep);
+          trackMemoryEdited("group");
         } else {
           await createGroupMemory(currentGroupId, user.uid, input, photos);
+          trackMemoryCreated("group");
         }
       } else {
         // Personal memory
         if (editingMemory) {
           await updateMemory(user.uid, editingMemory, input, photos, photoUrlsToKeep);
+          trackMemoryEdited("my_memories");
         } else {
           await createMemory(user.uid, input, photos);
+          trackMemoryCreated("my_memories");
         }
       }
 
+      trackEvent("add_memory_saved", { source_type: currentGroupId ? "group" : "my_memories" });
+      trackPhotoUploaded(photos.length, currentGroupId ? "group" : "my_memories");
+      trackButtonClick("save_memory", "add_edit_memory", {
+        source_type: currentGroupId ? "group" : "my_memories",
+        group_id: currentGroupId,
+      });
       closeModal();
       setSelectedLocation(null);
       setIsPinDropMode(false);
@@ -195,8 +297,8 @@ export function MemoryJarApp() {
     if (memory) setSelectedMemory(memory);
   };
 
-  // Can add memory when not in "everyone" view
-  const canAddMemory = viewMode !== "everyone";
+  // Can add memory only into a concrete personal or group context.
+  const canAddMemory = viewMode !== "everyone" && viewMode !== "all-memories";
 
   if (isAuthLoading) {
     return <main className="loading-shell">Opening Memory Jar...</main>;

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Copy, Check, Link2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { createGroup, getGroup } from "@/lib/groups";
+import { trackButtonClick, trackGroupCreated } from "@/lib/analytics";
 
 interface CreateGroupModalProps {
   onClose: () => void;
@@ -33,6 +34,7 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
         },
         { name: groupName.trim() }
       );
+      trackGroupCreated(groupId);
       
       const group = await getGroup(groupId);
       if (group) {
@@ -50,6 +52,9 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
     : "";
 
   const handleCopy = async () => {
+    trackButtonClick("copy_group_invite_link", "create_group_modal", {
+      group_id: createdGroup?.id,
+    });
     try {
       await navigator.clipboard.writeText(joinLink);
       setCopied(true);
@@ -69,6 +74,7 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
 
   const handleDone = () => {
     if (createdGroup) {
+      trackButtonClick("group_created_done", "create_group_modal", { group_id: createdGroup.id });
       setViewMode(`group-${createdGroup.id}`);
     }
     onClose();

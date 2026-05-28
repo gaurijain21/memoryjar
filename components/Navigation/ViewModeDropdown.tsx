@@ -1,7 +1,8 @@
 "use client";
 
-import { Globe, Lock, Users, Plus, Check } from "lucide-react";
+import { Globe, Images, Lock, Users, Plus, Check } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { trackEvent } from "@/lib/analytics";
 
 interface ViewModeDropdownProps {
   onClose: () => void;
@@ -11,13 +12,30 @@ interface ViewModeDropdownProps {
 export function ViewModeDropdown({ onClose, onCreateGroup }: ViewModeDropdownProps) {
   const { viewMode, setViewMode, groups, user } = useApp();
 
-  const handleSelect = (mode: "my-memories" | "everyone" | `group-${string}`) => {
+  const handleSelect = (mode: "all-memories" | "my-memories" | "everyone" | `group-${string}`) => {
     setViewMode(mode);
+    trackEvent("dropdown_changed", { selected_view: mode });
+    if (mode === "all-memories") trackEvent("all_memories_selected");
+    if (mode === "my-memories") trackEvent("my_memories_selected");
+    if (mode === "everyone") trackEvent("everyones_memories_selected");
+    if (mode.startsWith("group-")) {
+      trackEvent("group_selected", { group_id: mode.replace("group-", "") });
+    }
     onClose();
   };
 
   return (
     <div className="view-dropdown-menu">
+      <button
+        className={`view-dropdown-item ${viewMode === "all-memories" ? "active" : ""}`}
+        onClick={() => handleSelect("all-memories")}
+        type="button"
+      >
+        <Images size={16} />
+        <span>All Memories</span>
+        {viewMode === "all-memories" && <Check size={14} className="check-icon" />}
+      </button>
+
       <button
         className={`view-dropdown-item ${viewMode === "my-memories" ? "active" : ""}`}
         onClick={() => handleSelect("my-memories")}

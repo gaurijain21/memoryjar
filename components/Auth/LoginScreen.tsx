@@ -1,29 +1,294 @@
 "use client";
 
-import { signInWithPopup } from "firebase/auth";
-import { MapPin, Sparkles } from "lucide-react";
-import { auth, googleProvider } from "@/lib/firebase";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import {
+  browserLocalPersistence,
+  getRedirectResult,
+  setPersistence,
+  signInWithPopup,
+} from "firebase/auth";
+import { auth, firebaseApp, firebaseConfig, googleProvider } from "@/lib/firebase";
+import { useApp } from "@/contexts/AppContext";
+import { joinGroupByCode } from "@/lib/groups";
+import { trackEvent, trackGroupJoined, trackLogin } from "@/lib/analytics";
+
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" className="google-g-icon" viewBox="0 0 24 24">
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.3 9.14 5.38 12 5.38z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+const inviteStorageKeys = ["pendingInviteCode", "pendingJoinCode"];
+
+function getStoredInviteCode() {
+  for (const key of inviteStorageKeys) {
+    const sessionValue = sessionStorage.getItem(key);
+    if (sessionValue) return sessionValue;
+  }
+
+  return localStorage.getItem("pendingInviteCode");
+}
+
+function saveInviteCode(code: string) {
+  sessionStorage.setItem("pendingInviteCode", code);
+  sessionStorage.setItem("postLoginRedirect", `/join/${code}`);
+  localStorage.setItem("pendingInviteCode", code);
+}
+
+function clearInviteCode() {
+  sessionStorage.removeItem("pendingInviteCode");
+  sessionStorage.removeItem("pendingJoinCode");
+  sessionStorage.removeItem("postLoginRedirect");
+  localStorage.removeItem("pendingInviteCode");
+}
+
+function validateFirebaseAuthConfig() {
+  const expectedAuthDomain = `${firebaseConfig.projectId}.firebaseapp.com`;
+  const isDemoConfig =
+    firebaseConfig.projectId === "demo-memory-jar" ||
+    firebaseConfig.authDomain === "demo-memory-jar.firebaseapp.com";
+  const isAuthDomainCorrect = firebaseConfig.authDomain === expectedAuthDomain;
+
+  if (!firebaseConfig.authDomain || isDemoConfig || !isAuthDomainCorrect) {
+    console.error("[MemoryJar auth] Firebase authDomain looks wrong", {
+      authDomain: firebaseConfig.authDomain,
+      projectId: firebaseConfig.projectId,
+      expectedAuthDomain,
+      firebaseAppName: firebaseApp.name,
+    });
+    return;
+  }
+
+  console.info("[MemoryJar auth] Firebase auth config", {
+    authDomain: firebaseConfig.authDomain,
+    projectId: firebaseConfig.projectId,
+    firebaseAppName: firebaseApp.name,
+    currentHost: window.location.hostname,
+    localhostAuthorizedDomainRequired: window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1",
+  });
+}
 
 export function LoginScreen() {
+  const router = useRouter();
+  const { user, isAuthLoading, setViewMode } = useApp();
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isJoiningInvite, setIsJoiningInvite] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [redirectResultChecked, setRedirectResultChecked] = useState(false);
+  const hasCheckedRedirectResult = useRef(false);
+  const joinAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasCheckedRedirectResult.current) return;
+    hasCheckedRedirectResult.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const urlInviteCode = params.get("inviteCode");
+    const storedInviteCode = getStoredInviteCode();
+    const code = urlInviteCode || storedInviteCode;
+
+    validateFirebaseAuthConfig();
+    trackEvent("login_view", { has_invite: Boolean(code) });
+    console.info("[MemoryJar invite] login page loaded", {
+      authLoading: isAuthLoading,
+      currentUserExists: Boolean(auth.currentUser),
+      authCurrentUserUid: auth.currentUser?.uid ?? null,
+      firebaseAppName: firebaseApp.name,
+      authDomain: firebaseConfig.authDomain,
+      host: window.location.hostname,
+      inviteCodeFromUrl: urlInviteCode,
+      pendingInviteCodeFromStorage: storedInviteCode,
+    });
+
+    if (code) {
+      setInviteCode(code);
+      saveInviteCode(code);
+    }
+
+    async function finishRedirect() {
+      try {
+        const result = await getRedirectResult(auth);
+        console.info("[MemoryJar invite] getRedirectResult finished", {
+          hasResult: Boolean(result),
+          resultUserUid: result?.user.uid ?? null,
+          authCurrentUserUid: auth.currentUser?.uid ?? null,
+          authDomain: firebaseConfig.authDomain,
+          firebaseAppName: firebaseApp.name,
+        });
+      } catch (redirectError) {
+        console.error("[MemoryJar invite] getRedirectResult failed", redirectError);
+        setError(
+          redirectError instanceof Error
+            ? `Google sign-in could not finish: ${redirectError.message}`
+            : "Google sign-in could not finish. Please try again.",
+        );
+      } finally {
+        setRedirectResultChecked(true);
+      }
+    }
+
+    finishRedirect();
+  }, [isAuthLoading]);
+
+  useEffect(() => {
+    console.info("[MemoryJar invite] onAuthStateChanged/context auth", {
+      authLoading: isAuthLoading,
+      currentUserExists: Boolean(user),
+      uid: user?.uid ?? null,
+      inviteCode,
+      redirectResultChecked,
+    });
+  }, [inviteCode, isAuthLoading, redirectResultChecked, user]);
+
+  useEffect(() => {
+    if (isAuthLoading || !redirectResultChecked || !user || !inviteCode || joinAttemptedRef.current) return;
+
+    const currentUser = user;
+    const currentInviteCode = inviteCode;
+    let cancelled = false;
+
+    async function joinPendingInvite() {
+      joinAttemptedRef.current = true;
+      setIsJoiningInvite(true);
+      setError(null);
+      console.info("[MemoryJar invite] joining group started", {
+        inviteCode: currentInviteCode,
+        uid: currentUser.uid,
+      });
+
+      try {
+        const result = await joinGroupByCode(
+          currentUser.uid,
+          {
+            displayName: currentUser.displayName ?? currentUser.email ?? "User",
+            email: currentUser.email,
+            photoURL: currentUser.photoURL,
+          },
+          currentInviteCode,
+        );
+
+        if (cancelled) return;
+
+        if (!result.success || !result.groupId) {
+          console.error("[MemoryJar invite] joining group failed", result);
+          setError(result.error ?? "Could not join this group.");
+          setIsJoiningInvite(false);
+          return;
+        }
+
+        console.info("[MemoryJar invite] joining group success", {
+          groupId: result.groupId,
+          alreadyMember: Boolean(result.alreadyMember),
+          redirectDestination: "/",
+        });
+        trackGroupJoined(result.groupId, result.alreadyMember);
+        sessionStorage.setItem("joinedGroupId", result.groupId);
+        setViewMode(`group-${result.groupId}`);
+        clearInviteCode();
+        console.info("[MemoryJar invite] redirecting to home");
+        router.replace("/");
+      } catch (joinError) {
+        if (!cancelled) {
+          console.error("[MemoryJar invite] joining group threw", joinError);
+          setError(joinError instanceof Error ? joinError.message : "Could not join this group.");
+          setIsJoiningInvite(false);
+        }
+      }
+    }
+
+    joinPendingInvite();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteCode, isAuthLoading, redirectResultChecked, router, setViewMode, user]);
+
+  useEffect(() => {
+    if (isAuthLoading || !redirectResultChecked || !user || inviteCode || window.location.pathname !== "/login") return;
+    console.info("[MemoryJar invite] current user exists without invite, redirecting home");
+    router.replace("/");
+  }, [inviteCode, isAuthLoading, redirectResultChecked, router, user]);
+
+  const handleGoogleSignIn = async () => {
+    if (isSigningIn || isJoiningInvite) return;
+
+    setIsSigningIn(true);
+    setError(null);
+
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      if (inviteCode) saveInviteCode(inviteCode);
+
+      console.info("[MemoryJar invite] starting popup sign-in", {
+        inviteCode,
+        authCurrentUserBeforePopup: auth.currentUser?.uid ?? null,
+      });
+      const result = await signInWithPopup(auth, googleProvider);
+      console.info("[MemoryJar invite] popup sign-in success", {
+        resultUserUid: result.user.uid,
+        authCurrentUserAfterPopup: auth.currentUser?.uid ?? null,
+      });
+      trackLogin("google_popup");
+    } catch (signInError) {
+      console.error("[MemoryJar invite] Google sign-in failed", signInError);
+      setError(
+        signInError instanceof Error
+          ? `Google sign-in failed: ${signInError.message}`
+          : "Google sign-in failed. Please try again.",
+      );
+      setIsSigningIn(false);
+    }
+  };
+
   return (
     <main className="login-shell">
       <section className="login-card">
-        <div className="brand-mark">
-          <MapPin size={30} />
-        </div>
-        <p className="eyebrow">Private memory mapping</p>
+        <Image
+          alt="Memory Jar"
+          className="login-logo-image"
+          height={96}
+          priority
+          src="/logomap.jpg"
+          width={96}
+        />
+        <p className="eyebrow">Every pin tells a story</p>
         <h1>Memory Jar</h1>
         <p className="login-copy">
-          Pin the places that made you pause, keep the photos close, and wander
-          through your own little world map by time.
+          {inviteCode
+            ? "Sign in once to accept your group invite."
+            : "Save photos, places, and moments that matter most."}
         </p>
+
+        {error ? <div className="join-error login-error">{error}</div> : null}
+        
         <button
-          className="primary-button"
-          onClick={() => signInWithPopup(auth, googleProvider)}
+          className="google-signin-button"
+          disabled={isSigningIn || isJoiningInvite}
+          onClick={handleGoogleSignIn}
           type="button"
         >
-          <Sparkles size={18} />
-          Continue with Google
+          <GoogleIcon />
+          {isJoiningInvite ? "Joining group..." : isSigningIn ? "Opening Google..." : "Continue with Google"}
         </button>
       </section>
     </main>

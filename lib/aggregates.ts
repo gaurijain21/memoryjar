@@ -12,15 +12,21 @@ import type { AggregateMarker, MemoryInput } from "@/types/memory";
 
 const aggregateCollection = collection(db, "memoryLocationAggregates");
 
-function aggregateId(input: Pick<MemoryInput, "lat" | "lng">) {
+function aggregateId(input: Pick<MemoryInput, "lat" | "lng" | "placeId">) {
+  if (input.placeId) return `place_${input.placeId}`;
   return `${input.lat.toFixed(1)}_${input.lng.toFixed(1)}`;
 }
 
 function aggregatePayload(input: MemoryInput) {
   return {
-    lat: Number(input.lat.toFixed(1)),
-    lng: Number(input.lng.toFixed(1)),
-    locationName: input.locationName || "Selected location",
+    formattedAddress: input.formattedAddress ?? null,
+    lat: input.lat,
+    lng: input.lng,
+    locationName: input.placeName || input.formattedAddress || input.locationName || "Memory location",
+    locationSource: input.locationSource ?? (input.placeId ? "search" : "pin"),
+    placeId: input.placeId ?? null,
+    placeName: input.placeName ?? null,
+    placePhotoReference: input.placePhotoReference ?? null,
     updatedAt: serverTimestamp(),
   };
 }
@@ -37,7 +43,7 @@ export function subscribeToMemoryLocationAggregates(
           .map((document) => ({
             id: document.id,
             ...document.data(),
-          })) as AggregateMarker[],
+          }) as AggregateMarker),
       );
     },
     onError,

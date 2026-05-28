@@ -87,6 +87,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      console.info("[MemoryJar auth] onAuthStateChanged user", {
+        currentUserExists: Boolean(firebaseUser),
+        uid: firebaseUser?.uid ?? null,
+        email: firebaseUser?.email ?? null,
+      });
       setUser(firebaseUser);
       setIsAuthLoading(false);
     });

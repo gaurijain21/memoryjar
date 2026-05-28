@@ -1,12 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Mail, User } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
+import { trackEvent } from "@/lib/analytics";
 
 export function PersonalInfoPage() {
+  const router = useRouter();
   const { user, setCurrentPage } = useApp();
 
   if (!user) return null;
@@ -16,7 +19,10 @@ export function PersonalInfoPage() {
       <div className="page-header">
         <button 
           className="back-button" 
-          onClick={() => setCurrentPage("main")} 
+          onClick={() => {
+            setCurrentPage("main");
+            router.replace("/");
+          }} 
           type="button"
           aria-label="Back"
         >
@@ -59,7 +65,10 @@ export function PersonalInfoPage() {
 
         <button
           className="danger-button full-width"
-          onClick={() => signOut(auth)}
+          onClick={() => {
+            trackEvent("logout_clicked", { page: "personal_information" });
+            signOut(auth);
+          }}
           type="button"
         >
           Sign Out
