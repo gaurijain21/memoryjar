@@ -7,6 +7,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { Users, Loader2 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { getGroupByJoinCode, joinGroupByCode } from "@/lib/groups";
+import { clearInviteCode, getStoredInviteCode, saveInviteCode } from "@/lib/inviteStorage";
 import { trackEvent, trackGroupJoined } from "@/lib/analytics";
 
 interface JoinPageProps {
@@ -43,9 +44,7 @@ export default function JoinPage({ params }: JoinPageProps) {
   useEffect(() => {
     if (code) {
       trackEvent("join_invite_view", { invite_code_present: true });
-      sessionStorage.setItem("pendingInviteCode", code);
-      sessionStorage.setItem("postLoginRedirect", `/join/${code}`);
-      localStorage.setItem("pendingInviteCode", code);
+      saveInviteCode(code);
       console.info("[MemoryJar invite] join code found", {
         code,
         savedToSessionStorage: true,
@@ -69,11 +68,7 @@ export default function JoinPage({ params }: JoinPageProps) {
     if (!authReady || !user || joinAttemptedRef.current) return;
 
     const currentUser = user;
-    const inviteCode =
-      sessionStorage.getItem("pendingInviteCode") ||
-      localStorage.getItem("pendingInviteCode") ||
-      sessionStorage.getItem("pendingJoinCode") ||
-      code;
+    const inviteCode = getStoredInviteCode() || code;
     if (!inviteCode) {
       console.error("[MemoryJar invite] pending invite code missing on join route");
       setError("This invite link is invalid or has expired.");
@@ -128,10 +123,7 @@ export default function JoinPage({ params }: JoinPageProps) {
           });
           trackGroupJoined(result.groupId, result.alreadyMember);
           sessionStorage.setItem("joinedGroupId", result.groupId);
-          sessionStorage.removeItem("pendingInviteCode");
-          sessionStorage.removeItem("pendingJoinCode");
-          sessionStorage.removeItem("postLoginRedirect");
-          localStorage.removeItem("pendingInviteCode");
+          clearInviteCode();
           router.replace("/");
           return;
         }

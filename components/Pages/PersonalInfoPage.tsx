@@ -6,6 +6,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
+import { clearInviteCode } from "@/lib/inviteStorage";
 import { trackEvent } from "@/lib/analytics";
 
 export function PersonalInfoPage() {
@@ -67,6 +68,7 @@ export function PersonalInfoPage() {
           className="danger-button full-width"
           onClick={() => {
             trackEvent("logout_clicked", { page: "personal_information" });
+            clearInviteCode();
             signOut(auth);
           }}
           type="button"

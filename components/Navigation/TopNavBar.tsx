@@ -7,6 +7,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
+import { clearInviteCode } from "@/lib/inviteStorage";
 import { ViewModeDropdown } from "./ViewModeDropdown";
 import { CreateGroupModal } from "@/components/Groups/CreateGroupModal";
 import { trackButtonClick, trackEvent } from "@/lib/analytics";
@@ -57,6 +58,7 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
     
     if (action === "logout") {
       trackEvent("logout_clicked", { page: "top_ribbon" });
+      clearInviteCode();
       signOut(auth);
       return;
     }

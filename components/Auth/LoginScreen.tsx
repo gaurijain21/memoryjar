@@ -3,14 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import {
-  browserLocalPersistence,
-  setPersistence,
-  signInWithPopup,
-} from "firebase/auth";
+import { signInWithPopup } from "firebase/auth";
 import { auth, firebaseApp, firebaseConfig, googleProvider } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
 import { joinGroupByCode } from "@/lib/groups";
+import { clearInviteCode, getStoredInviteCode, saveInviteCode } from "@/lib/inviteStorage";
 import { trackEvent, trackGroupJoined, trackLogin } from "@/lib/analytics";
 
 function GoogleIcon() {
@@ -34,30 +31,6 @@ function GoogleIcon() {
       />
     </svg>
   );
-}
-
-const inviteStorageKeys = ["pendingInviteCode", "pendingJoinCode"];
-
-function getStoredInviteCode() {
-  for (const key of inviteStorageKeys) {
-    const sessionValue = sessionStorage.getItem(key);
-    if (sessionValue) return sessionValue;
-  }
-
-  return localStorage.getItem("pendingInviteCode");
-}
-
-function saveInviteCode(code: string) {
-  sessionStorage.setItem("pendingInviteCode", code);
-  sessionStorage.setItem("postLoginRedirect", `/join/${code}`);
-  localStorage.setItem("pendingInviteCode", code);
-}
-
-function clearInviteCode() {
-  sessionStorage.removeItem("pendingInviteCode");
-  sessionStorage.removeItem("pendingJoinCode");
-  sessionStorage.removeItem("postLoginRedirect");
-  localStorage.removeItem("pendingInviteCode");
 }
 
 function validateFirebaseAuthConfig() {
@@ -99,6 +72,7 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const joinAttemptedRef = useRef(false);
+  const popupInProgressRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -131,6 +105,20 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
       uid: user?.uid ?? null,
       inviteCode,
     });
+  }, [inviteCode, isAuthLoading, user]);
+
+  useEffect(() => {
+    if (isAuthLoading || user) return;
+
+    setIsSigningIn(false);
+    setIsJoiningInvite(false);
+    setError(null);
+    joinAttemptedRef.current = false;
+    popupInProgressRef.current = false;
+
+    if (!inviteCode) {
+      clearInviteCode();
+    }
   }, [inviteCode, isAuthLoading, user]);
 
   useEffect(() => {
@@ -203,15 +191,17 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
   }, [inviteCode, isAuthLoading, router, user]);
 
   const handleGoogleSignIn = async () => {
-    if (isSigningIn || isJoiningInvite) return;
+    if (isSigningIn || isJoiningInvite || popupInProgressRef.current) return;
 
+    if (inviteCode) {
+      saveInviteCode(inviteCode);
+    }
+
+    popupInProgressRef.current = true;
     setIsSigningIn(true);
     setError(null);
 
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      if (inviteCode) saveInviteCode(inviteCode);
-
       console.info("[MemoryJar invite] starting popup sign-in", {
         inviteCode,
         authCurrentUserBeforePopup: auth.currentUser?.uid ?? null,
@@ -222,22 +212,28 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
         authCurrentUserAfterPopup: auth.currentUser?.uid ?? null,
       });
       trackLogin("google_popup");
+
+      if (!inviteCode && window.location.pathname === "/login") {
+        router.replace("/");
+      }
     } catch (signInError) {
       console.error("[MemoryJar invite] Google sign-in failed", signInError);
       const firebaseError = signInError as { code?: string; message?: string };
-      const popupWasBlocked =
-        firebaseError.code === "auth/popup-blocked"
-        || firebaseError.code === "auth/cancelled-popup-request"
-        || firebaseError.message?.toLowerCase().includes("popup")
-        || firebaseError.message?.toLowerCase().includes("missing initial state");
+
+      console.error("[MemoryJar invite] Google sign-in error details", {
+        code: firebaseError.code ?? null,
+        message: firebaseError.message ?? null,
+      });
 
       setError(
-        popupWasBlocked
+        firebaseError.code === "auth/popup-blocked"
           ? "Popup sign-in was blocked. Please allow popups or try another browser."
           : signInError instanceof Error
             ? `Google sign-in failed: ${signInError.message}`
             : "Google sign-in failed. Please try again.",
       );
+    } finally {
+      popupInProgressRef.current = false;
       setIsSigningIn(false);
     }
   };

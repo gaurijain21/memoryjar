@@ -8,7 +8,12 @@ import React, {
   useCallback,
   type ReactNode,
 } from "react";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  onAuthStateChanged,
+  setPersistence,
+  type User,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { subscribeToUserGroups } from "@/lib/groups";
 import type { Group, ViewMode, AppPage, Memory } from "@/types/memory";
@@ -85,6 +90,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Selected memory for editing
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [memoryToEdit, setMemoryToEdit] = useState<Memory | null>(null);
+
+  useEffect(() => {
+    void setPersistence(auth, browserLocalPersistence).catch((error) => {
+      console.error("[MemoryJar auth] Failed to set auth persistence", error);
+    });
+  }, []);
 
   // Auth listener
   useEffect(() => {
