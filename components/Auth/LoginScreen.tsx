@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   browserLocalPersistence,
-  getRedirectResult,
   setPersistence,
   signInWithPopup,
 } from "firebase/auth";
@@ -99,14 +98,9 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
   const [isJoiningInvite, setIsJoiningInvite] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [redirectResultChecked, setRedirectResultChecked] = useState(false);
-  const hasCheckedRedirectResult = useRef(false);
   const joinAttemptedRef = useRef(false);
 
   useEffect(() => {
-    if (hasCheckedRedirectResult.current) return;
-    hasCheckedRedirectResult.current = true;
-
     const params = new URLSearchParams(window.location.search);
     const urlInviteCode = params.get("inviteCode");
     const storedInviteCode = getStoredInviteCode();
@@ -115,7 +109,6 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
     validateFirebaseAuthConfig();
     trackEvent("login_view", { has_invite: Boolean(code) });
     console.info("[MemoryJar invite] login page loaded", {
-      authLoading: isAuthLoading,
       currentUserExists: Boolean(auth.currentUser),
       authCurrentUserUid: auth.currentUser?.uid ?? null,
       firebaseAppName: firebaseApp.name,
@@ -129,31 +122,7 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
       setInviteCode(code);
       saveInviteCode(code);
     }
-
-    async function finishRedirect() {
-      try {
-        const result = await getRedirectResult(auth);
-        console.info("[MemoryJar invite] getRedirectResult finished", {
-          hasResult: Boolean(result),
-          resultUserUid: result?.user.uid ?? null,
-          authCurrentUserUid: auth.currentUser?.uid ?? null,
-          authDomain: firebaseConfig.authDomain,
-          firebaseAppName: firebaseApp.name,
-        });
-      } catch (redirectError) {
-        console.error("[MemoryJar invite] getRedirectResult failed", redirectError);
-        setError(
-          redirectError instanceof Error
-            ? `Google sign-in could not finish: ${redirectError.message}`
-            : "Google sign-in could not finish. Please try again.",
-        );
-      } finally {
-        setRedirectResultChecked(true);
-      }
-    }
-
-    finishRedirect();
-  }, [isAuthLoading]);
+  }, []);
 
   useEffect(() => {
     console.info("[MemoryJar invite] onAuthStateChanged/context auth", {
@@ -161,12 +130,11 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
       currentUserExists: Boolean(user),
       uid: user?.uid ?? null,
       inviteCode,
-      redirectResultChecked,
     });
-  }, [inviteCode, isAuthLoading, redirectResultChecked, user]);
+  }, [inviteCode, isAuthLoading, user]);
 
   useEffect(() => {
-    if (isAuthLoading || !redirectResultChecked || !user || !inviteCode || joinAttemptedRef.current) return;
+    if (isAuthLoading || !user || !inviteCode || joinAttemptedRef.current) return;
 
     const currentUser = user;
     const currentInviteCode = inviteCode;
@@ -226,13 +194,13 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [inviteCode, isAuthLoading, redirectResultChecked, router, setViewMode, user]);
+  }, [inviteCode, isAuthLoading, router, setViewMode, user]);
 
   useEffect(() => {
-    if (isAuthLoading || !redirectResultChecked || !user || inviteCode || window.location.pathname !== "/login") return;
+    if (isAuthLoading || !user || inviteCode || window.location.pathname !== "/login") return;
     console.info("[MemoryJar invite] current user exists without invite, redirecting home");
     router.replace("/");
-  }, [inviteCode, isAuthLoading, redirectResultChecked, router, user]);
+  }, [inviteCode, isAuthLoading, router, user]);
 
   const handleGoogleSignIn = async () => {
     if (isSigningIn || isJoiningInvite) return;
@@ -256,10 +224,19 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
       trackLogin("google_popup");
     } catch (signInError) {
       console.error("[MemoryJar invite] Google sign-in failed", signInError);
+      const firebaseError = signInError as { code?: string; message?: string };
+      const popupWasBlocked =
+        firebaseError.code === "auth/popup-blocked"
+        || firebaseError.code === "auth/cancelled-popup-request"
+        || firebaseError.message?.toLowerCase().includes("popup")
+        || firebaseError.message?.toLowerCase().includes("missing initial state");
+
       setError(
-        signInError instanceof Error
-          ? `Google sign-in failed: ${signInError.message}`
-          : "Google sign-in failed. Please try again.",
+        popupWasBlocked
+          ? "Popup sign-in was blocked. Please allow popups or try another browser."
+          : signInError instanceof Error
+            ? `Google sign-in failed: ${signInError.message}`
+            : "Google sign-in failed. Please try again.",
       );
       setIsSigningIn(false);
     }
