@@ -1,20 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { ChevronDown, LogOut, MapPinned, Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 import { LoginScreen } from "@/components/Auth/LoginScreen";
 import { AddMemoryModal } from "@/components/Memory/AddMemoryModal";
 import { MemoryDetailPanel } from "@/components/Memory/MemoryDetailPanel";
 import { MemoryTimeline } from "@/components/Timeline/MemoryTimeline";
-import { auth } from "@/lib/firebase";
+import { TopNavBar } from "@/components/Navigation/TopNavBar";
+import { ViewGroupsPage } from "@/components/Pages/ViewGroupsPage";
+import { PersonalInfoPage } from "@/components/Pages/PersonalInfoPage";
+import { EditMemoriesPage } from "@/components/Pages/EditMemoriesPage";
+import { useApp } from "@/contexts/AppContext";
 import {
   createMemory,
-  deleteMemory,
   subscribeToMemories,
   updateMemory,
 } from "@/lib/memories";
+import {
+  createGroupMemory,
+  subscribeToGroupMemories,
+  updateGroupMemory,
+} from "@/lib/groups";
 import type { Memory, MemoryInput, SelectedLocation } from "@/types/memory";
 
 const MemoryMap = dynamic(
@@ -25,10 +31,22 @@ const MemoryMap = dynamic(
 );
 
 export function MemoryJarApp() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const {
+    user,
+    isAuthLoading,
+    viewMode,
+    currentPage,
+    pendingAction,
+    setPendingAction,
+    selectedMemory,
+    setSelectedMemory,
+    memoryToEdit,
+    setMemoryToEdit,
+    currentGroupId,
+    setViewMode,
+  } = useApp();
+
   const [memories, setMemories] = useState<Memory[]>([]);
-  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
@@ -37,25 +55,63 @@ export function MemoryJarApp() {
   const [rangeIndex, setRangeIndex] = useState(0);
   const [isPinDropMode, setIsPinDropMode] = useState(false);
 
-  useEffect(() => {
-    return onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthReady(true);
-    });
-  }, []);
-
+  // Subscribe to memories based on view mode
   useEffect(() => {
     if (!user) {
       setMemories([]);
       return;
     }
 
-    return subscribeToMemories(
-      user.uid,
-      setMemories,
-      (snapshotError) => setError(snapshotError.message),
-    );
-  }, [user]);
+    if (viewMode === "everyone") {
+      setMemories([]);
+      setSelectedMemory(null);
+      return;
+    }
+
+    if (viewMode === "my-memories") {
+      return subscribeToMemories(
+        user.uid,
+        setMemories,
+        (snapshotError) => setError(snapshotError.message),
+      );
+    }
+
+    // For group view, subscribe to group memories
+    if (currentGroupId) {
+      return subscribeToGroupMemories(
+        currentGroupId,
+        setMemories,
+        (snapshotError) => setError(snapshotError.message),
+      );
+    }
+  }, [user, viewMode, currentGroupId, setSelectedMemory]);
+
+  // Handle joined group from session storage (after join page redirect)
+  useEffect(() => {
+    const joinedGroupId = sessionStorage.getItem("joinedGroupId");
+    if (joinedGroupId && user) {
+      setViewMode(`group-${joinedGroupId}`);
+      sessionStorage.removeItem("joinedGroupId");
+    }
+  }, [user, setViewMode]);
+
+  // Handle pending action after login
+  useEffect(() => {
+    if (user && pendingAction) {
+      if (pendingAction.type === "add-memory") {
+        openAddModal();
+        setPendingAction(null);
+      }
+    }
+  }, [user, pendingAction, setPendingAction]);
+
+  // Open edit modal only for explicit edit requests from management pages.
+  useEffect(() => {
+    if (memoryToEdit && currentPage === "main") {
+      openEditModal(memoryToEdit);
+      setMemoryToEdit(null);
+    }
+  }, [memoryToEdit, currentPage, setMemoryToEdit]);
 
   const sortedMemories = useMemo(
     () => [...memories].sort((a, b) => a.date.localeCompare(b.date)),
@@ -84,6 +140,7 @@ export function MemoryJarApp() {
     setIsModalOpen(false);
     setEditingMemory(null);
     setIsPinDropMode(false);
+    setSelectedMemory(null);
   };
 
   const handleSubmitMemory = async (
@@ -96,10 +153,20 @@ export function MemoryJarApp() {
     setError(null);
 
     try {
-      if (editingMemory) {
-        await updateMemory(user.uid, editingMemory, input, photos, photoUrlsToKeep);
+      if (currentGroupId) {
+        // Group memory
+        if (editingMemory) {
+          await updateGroupMemory(currentGroupId, editingMemory, input, photos, photoUrlsToKeep);
+        } else {
+          await createGroupMemory(currentGroupId, user.uid, input, photos);
+        }
       } else {
-        await createMemory(user.uid, input, photos);
+        // Personal memory
+        if (editingMemory) {
+          await updateMemory(user.uid, editingMemory, input, photos, photoUrlsToKeep);
+        } else {
+          await createMemory(user.uid, input, photos);
+        }
       }
 
       closeModal();
@@ -112,22 +179,16 @@ export function MemoryJarApp() {
     }
   };
 
-  const handleDelete = async (memory: Memory) => {
-    if (!user) return;
-    const confirmed = window.confirm(`Delete "${memory.title}"?`);
-    if (!confirmed) return;
-
-    await deleteMemory(user.uid, memory);
-    setSelectedMemory(null);
-  };
-
   const handleTimelineRange = (index: number) => {
     setRangeIndex(index);
     const memory = sortedMemories[index];
     if (memory) setSelectedMemory(memory);
   };
 
-  if (!authReady) {
+  // Can add memory when not in "everyone" view
+  const canAddMemory = viewMode !== "everyone";
+
+  if (isAuthLoading) {
     return <main className="loading-shell">Opening Memory Jar...</main>;
   }
 
@@ -135,53 +196,57 @@ export function MemoryJarApp() {
     return <LoginScreen />;
   }
 
+  // Render different pages based on currentPage
+  if (currentPage === "view-groups") {
+    return (
+      <div className="app-shell-with-nav">
+        <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
+        <ViewGroupsPage />
+      </div>
+    );
+  }
+
+  if (currentPage === "personal-info") {
+    return (
+      <div className="app-shell-with-nav">
+        <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
+        <PersonalInfoPage />
+      </div>
+    );
+  }
+
+  if (currentPage === "edit-memories") {
+    return (
+      <div className="app-shell-with-nav">
+        <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
+        <EditMemoriesPage />
+      </div>
+    );
+  }
+
+  // Main map view
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-chip">
-          <MapPinned size={27} />
-          <h1>Memory Jar</h1>
-        </div>
-        <div className="user-chip">
-          {user.photoURL ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt="" src={user.photoURL} />
-          ) : null}
-          <span>{user.displayName ?? user.email}</span>
-          <button
-            aria-label="Log out"
-            className="account-menu-button"
-            onClick={() => signOut(auth)}
-            type="button"
-          >
-            <ChevronDown className="desktop-only" size={17} />
-            <LogOut className="mobile-only" size={17} />
-          </button>
-        </div>
-      </header>
+    <main className="app-shell-with-nav">
+      <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
 
       {error ? <div className="error-toast">{error}</div> : null}
 
-      <MemoryMap
-        draftLocation={selectedLocation}
-        isSelectingLocation={isModalOpen}
-        isPinDropMode={isPinDropMode}
-        memories={memories}
-        onLocationSelected={setSelectedLocation}
-        onPinDropComplete={() => setIsPinDropMode(false)}
-        onSelectMemory={setSelectedMemory}
-        selectedMemory={selectedMemory}
-      />
-
-      <button aria-label="Add memory" className="add-button" onClick={openAddModal} type="button">
-        <Plus size={30} />
-      </button>
+      <div className="map-container">
+        <MemoryMap
+          draftLocation={selectedLocation}
+          isPinDropMode={isPinDropMode}
+          memories={memories}
+          viewMode={viewMode}
+          onLocationSelected={setSelectedLocation}
+          onPinDropComplete={() => setIsPinDropMode(false)}
+          onSelectMemory={setSelectedMemory}
+          selectedMemory={selectedMemory}
+        />
+      </div>
 
       <MemoryDetailPanel
-        memory={selectedMemory}
+        memory={viewMode === "everyone" ? null : selectedMemory}
         onClose={() => setSelectedMemory(null)}
-        onDelete={handleDelete}
-        onEdit={openEditModal}
       />
 
       <MemoryTimeline

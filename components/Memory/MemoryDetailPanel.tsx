@@ -1,47 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, MapPin, Pencil, Trash2, X } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, MapPin, X } from "lucide-react";
+import { formatMemoryDate } from "@/lib/formatDate";
 import type { Memory } from "@/types/memory";
 
 type MemoryDetailPanelProps = {
   memory: Memory | null;
   onClose: () => void;
-  onEdit: (memory: Memory) => void;
-  onDelete: (memory: Memory) => void;
 };
 
 export function MemoryDetailPanel({
   memory,
   onClose,
-  onEdit,
-  onDelete,
 }: MemoryDetailPanelProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
   if (!memory) return null;
 
-  const date = new Intl.DateTimeFormat("en", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(`${memory.date}T00:00:00`));
+  const date = formatMemoryDate(memory.date, "long");
   const photos = memory.photoUrls;
 
   return (
     <aside className="detail-panel">
       <div className="detail-actions">
-        <button aria-label="Edit" className="icon-button" onClick={() => onEdit(memory)} type="button">
-          <Pencil size={17} />
-        </button>
-        <button
-          aria-label="Delete"
-          className="icon-button danger"
-          onClick={() => onDelete(memory)}
-          type="button"
-        >
-          <Trash2 size={17} />
-        </button>
         <button aria-label="Close" className="icon-button" onClick={onClose} type="button">
           <X size={17} />
         </button>

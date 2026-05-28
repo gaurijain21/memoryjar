@@ -31,6 +31,9 @@ pnpm-debug.log*
 .turbo/
 .vercel/
 
+# imported UI source
+vercel_memoryjar_ui/
+
 # OS and editor files
 .DS_Store
 Thumbs.db

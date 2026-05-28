@@ -3,8 +3,7 @@
 import { useCallback, useMemo, useRef } from "react";
 import { GoogleMap, Marker, OverlayView, useJsApiLoader } from "@react-google-maps/api";
 import { Compass, LocateFixed, Minus, Plus } from "lucide-react";
-import { PlaceSearch } from "@/components/Map/PlaceSearch";
-import type { Memory, SelectedLocation } from "@/types/memory";
+import type { Memory, SelectedLocation, ViewMode } from "@/types/memory";
 
 const libraries: ("places")[] = ["places"];
 const defaultCenter = { lat: 20, lng: 0 };
@@ -19,8 +18,8 @@ type MemoryMapProps = {
   memories: Memory[];
   selectedMemory?: Memory | null;
   draftLocation?: SelectedLocation | null;
-  isSelectingLocation: boolean;
   isPinDropMode: boolean;
+  viewMode: ViewMode;
   onSelectMemory: (memory: Memory) => void;
   onLocationSelected: (location: SelectedLocation) => void;
   onPinDropComplete: () => void;
@@ -30,8 +29,8 @@ export function MemoryMap({
   memories,
   selectedMemory,
   draftLocation,
-  isSelectingLocation,
   isPinDropMode,
+  viewMode,
   onSelectMemory,
   onLocationSelected,
   onPinDropComplete,
@@ -41,6 +40,8 @@ export function MemoryMap({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
     libraries,
   });
+
+  const isEveryoneView = viewMode === "everyone";
 
   const markerGroups = useMemo(() => {
     const grouped = new Map<string, Memory[]>();
@@ -62,17 +63,6 @@ export function MemoryMap({
       mapRef.current?.setZoom(Math.max(mapRef.current.getZoom() ?? 4, 11));
     },
     [onSelectMemory],
-  );
-
-  const handlePlaceSelected = useCallback(
-    (selected: SelectedLocation) => {
-      mapRef.current?.panTo(selected);
-      mapRef.current?.setZoom(12);
-      if (isSelectingLocation) {
-        onLocationSelected(selected);
-      }
-    },
-    [isSelectingLocation, onLocationSelected],
   );
 
   const handleMapClick = useCallback(
@@ -109,11 +99,6 @@ export function MemoryMap({
   return (
     <div className={`map-wrap ${isPinDropMode ? "pin-drop-mode" : ""}`}>
       <div className="space-vignette" />
-      <PlaceSearch
-        className="map-search"
-        onPlaceSelected={handlePlaceSelected}
-        placeholder="Search for a place..."
-      />
       {isPinDropMode ? <div className="pin-drop-hint">Click the map to drop a memory pin</div> : null}
       <div className="map-controls" aria-label="Map controls">
         <button
@@ -197,19 +182,30 @@ export function MemoryMap({
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
             position={{ lat: memory.lat, lng: memory.lng }}
           >
-            <button
-              className={`memory-pin ${selectedMemory?.id === memory.id ? "active" : ""}`}
-              onClick={() => focusMemory(memory)}
-              type="button"
-            >
-              {memory.photoUrls[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img alt="" src={memory.photoUrls[0]} />
-              ) : (
-                <span />
-              )}
-              {count > 1 ? <b>{count}</b> : null}
-            </button>
+            {isEveryoneView ? (
+              <button
+                className="aggregate-pin"
+                onClick={() => focusMemory(memory)}
+                type="button"
+                title={`${count} ${count === 1 ? "memory" : "memories"} at ${memory.locationName}`}
+              >
+                <span className="aggregate-count">{count}</span>
+              </button>
+            ) : (
+              <button
+                className={`memory-pin ${selectedMemory?.id === memory.id ? "active" : ""}`}
+                onClick={() => focusMemory(memory)}
+                type="button"
+              >
+                {memory.photoUrls[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="" src={memory.photoUrls[0]} />
+                ) : (
+                  <span />
+                )}
+                {count > 1 ? <b>{count}</b> : null}
+              </button>
+            )}
           </OverlayView>
         ))}
         {draftLocation ? (

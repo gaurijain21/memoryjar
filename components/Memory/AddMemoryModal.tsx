@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ImagePlus, MapPin, MousePointer2, Trash2, X } from "lucide-react";
+import { ImagePlus, MapPin, MousePointer2, Search, Trash2, X } from "lucide-react";
 import { PlaceSearch } from "@/components/Map/PlaceSearch";
 import type { Memory, MemoryInput, SelectedLocation } from "@/types/memory";
 
@@ -34,7 +34,8 @@ export function AddMemoryModal({
 }: AddMemoryModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState("");
+  const [month, setMonth] = useState("");
+  const [year, setYear] = useState("");
   const [locationName, setLocationName] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoUrlsToKeep, setPhotoUrlsToKeep] = useState<string[]>([]);
@@ -43,7 +44,9 @@ export function AddMemoryModal({
     if (!isOpen) return;
     setTitle(editingMemory?.title ?? "");
     setDescription(editingMemory?.description ?? "");
-    setDate(editingMemory?.date ?? new Date().toISOString().slice(0, 10));
+    const [savedYear = "", savedMonth = ""] = (editingMemory?.date ?? "").split("-");
+    setYear(savedYear || new Date().getFullYear().toString());
+    setMonth(savedMonth);
     setLocationName(editingMemory?.locationName ?? selectedLocation?.locationName ?? "");
     setPhotos([]);
     setPhotoUrlsToKeep(editingMemory?.photoUrls ?? []);
@@ -51,9 +54,7 @@ export function AddMemoryModal({
 
   useEffect(() => {
     if (selectedLocation?.locationName) {
-      setLocationName((current) =>
-        current && current !== "Dropped pin" ? current : selectedLocation.locationName,
-      );
+      setLocationName(selectedLocation.locationName);
     }
   }, [selectedLocation]);
 
@@ -66,16 +67,18 @@ export function AddMemoryModal({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!title.trim() || !date || (!selectedLocation && !editingMemory)) return;
+    if (!title.trim() || !year.trim() || (!selectedLocation && !editingMemory)) return;
 
     const location = selectedLocation ?? editingMemory;
     if (!location) return;
 
+    const normalizedDate = month ? `${year}-${month}` : year;
+
     await onSubmit(
       {
-        title,
-        description,
-        date,
+        title: title.trim(),
+        description: description.trim(),
+        date: normalizedDate,
         locationName: locationName || location.locationName,
         lat: location.lat,
         lng: location.lng,
@@ -103,7 +106,7 @@ export function AddMemoryModal({
         <label>
           <span>Title</span>
           <input
-            maxLength={80}
+            maxLength={50}
             onChange={(event) => setTitle(event.target.value)}
             required
             value={title}
@@ -113,9 +116,8 @@ export function AddMemoryModal({
         <label>
           <span>Description</span>
           <textarea
-            maxLength={220}
+            maxLength={150}
             onChange={(event) => setDescription(event.target.value)}
-            required
             rows={2}
             value={description}
           />
@@ -123,26 +125,33 @@ export function AddMemoryModal({
 
         <div className="form-grid">
           <label>
-            <span>Date</span>
+            <span>Month</span>
             <input
-              onChange={(event) => setDate(event.target.value)}
-              required
-              type="date"
-              value={date}
+              max="12"
+              min="01"
+              onBlur={() => setMonth((current) => current ? current.padStart(2, "0") : "")}
+              onChange={(event) => setMonth(event.target.value.slice(0, 2))}
+              placeholder="MM"
+              type="number"
+              value={month}
             />
           </label>
           <label>
-            <span>Location name</span>
+            <span>Year</span>
             <input
-              onChange={(event) => setLocationName(event.target.value)}
-              placeholder="Search or drop a pin"
+              max="9999"
+              min="1"
+              onChange={(event) => setYear(event.target.value)}
+              placeholder="YYYY"
               required
-              value={locationName}
+              type="number"
+              value={year}
             />
           </label>
         </div>
 
         <div className="drawer-location-tools">
+          <span className="section-label">Location</span>
           <PlaceSearch
             className="drawer-place-search"
             onPlaceSelected={(location) => {
@@ -161,12 +170,17 @@ export function AddMemoryModal({
           </button>
         </div>
 
-        <div className="location-chip">
-          <MapPin size={16} />
-          {selectedLocation || editingMemory
-            ? `${(selectedLocation ?? editingMemory)?.lat.toFixed(4)}, ${(selectedLocation ?? editingMemory)?.lng.toFixed(4)}`
-            : "Search above or click the map to choose a location"}
-        </div>
+        {selectedLocation || editingMemory ? (
+          <div className="location-chip">
+            <MapPin size={16} />
+            <span>{locationName || (selectedLocation ?? editingMemory)?.locationName}</span>
+          </div>
+        ) : (
+          <div className="location-chip muted">
+            <Search size={16} />
+            <span>Search or drop a pin to choose a location.</span>
+          </div>
+        )}
 
         <label className="photo-picker">
           <ImagePlus size={18} />
@@ -174,7 +188,11 @@ export function AddMemoryModal({
           <input
             accept="image/*"
             multiple
-            onChange={(event) => setPhotos(Array.from(event.target.files ?? []))}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              const remainingSlots = Math.max(10 - photoUrlsToKeep.length, 0);
+              setPhotos(files.slice(0, remainingSlots));
+            }}
             type="file"
           />
         </label>
@@ -205,7 +223,7 @@ export function AddMemoryModal({
 
         <button
           className="primary-button"
-          disabled={isSaving || !title.trim() || !date || (!selectedLocation && !editingMemory)}
+          disabled={isSaving || !title.trim() || !year.trim() || (!selectedLocation && !editingMemory)}
           type="submit"
         >
           {isSaving ? "Saving..." : editingMemory ? "Update memory" : "Save memory"}

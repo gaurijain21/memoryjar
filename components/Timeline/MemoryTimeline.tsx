@@ -24,15 +24,11 @@ export function MemoryTimeline({
   const sorted = [...memories].sort((a, b) => a.date.localeCompare(b.date));
   const selected = sorted[rangeIndex];
   const years = useMemo(() => {
-    const memoryYears = sorted.map((memory) =>
-      new Date(`${memory.date}T00:00:00`).getFullYear(),
-    );
+    const memoryYears = sorted.map((memory) => Number(memory.date.split("-")[0])).filter(Boolean);
     const fallback = new Date().getFullYear();
     return {
       start: memoryYears[0] ?? fallback,
-      current: selected
-        ? new Date(`${selected.date}T00:00:00`).getFullYear()
-        : fallback,
+      current: selected ? Number(selected.date.split("-")[0]) || fallback : fallback,
       end: memoryYears[memoryYears.length - 1] ?? fallback,
     };
   }, [selected, sorted]);

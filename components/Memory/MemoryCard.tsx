@@ -1,6 +1,7 @@
 "use client";
 
 import { MapPin } from "lucide-react";
+import { formatMemoryDate } from "@/lib/formatDate";
 import type { Memory } from "@/types/memory";
 
 type MemoryCardProps = {
@@ -10,11 +11,7 @@ type MemoryCardProps = {
 };
 
 export function MemoryCard({ memory, isActive, onClick }: MemoryCardProps) {
-  const date = new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(`${memory.date}T00:00:00`));
+  const date = formatMemoryDate(memory.date);
 
   return (
     <button
