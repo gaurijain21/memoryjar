@@ -16,6 +16,11 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
+import {
+  decrementMemoryLocationAggregate,
+  incrementMemoryLocationAggregate,
+  moveMemoryLocationAggregate,
+} from "@/lib/aggregates";
 import type { Memory, MemoryInput } from "@/types/memory";
 
 const memoriesCollection = (uid: string) => collection(db, "users", uid, "memories");
@@ -78,6 +83,7 @@ export async function createMemory(
     storagePaths: uploaded.map((photo) => photo.path),
     updatedAt: serverTimestamp(),
   });
+  await incrementMemoryLocationAggregate(input);
 
   return created.id;
 }
@@ -107,6 +113,7 @@ export async function updateMemory(
     storagePaths: [...keptStoragePaths, ...uploaded.map((photo) => photo.path)],
     updatedAt: serverTimestamp(),
   });
+  await moveMemoryLocationAggregate(memory, input);
 }
 
 export async function deleteMemory(uid: string, memory: Memory) {
@@ -114,4 +121,5 @@ export async function deleteMemory(uid: string, memory: Memory) {
     (memory.storagePaths ?? []).map((path) => deleteObject(ref(storage, path))),
   );
   await deleteDoc(memoryDoc(uid, memory.id));
+  await decrementMemoryLocationAggregate(memory);
 }

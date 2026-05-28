@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Calendar, ChevronLeft, ChevronRight, MapPin, X } from "lucide-react";
 import { formatMemoryDate } from "@/lib/formatDate";
+import { getReadableLocationName } from "@/lib/locationText";
 import type { Memory } from "@/types/memory";
 
 type MemoryDetailPanelProps = {
@@ -20,10 +21,12 @@ export function MemoryDetailPanel({
 
   const date = formatMemoryDate(memory.date, "long");
   const photos = memory.photoUrls;
+  const locationName = getReadableLocationName(memory.locationName);
 
   return (
     <aside className="detail-panel">
-      <div className="detail-actions">
+      <div className="detail-title-row">
+        <h2>{memory.title}</h2>
         <button aria-label="Close" className="icon-button" onClick={onClose} type="button">
           <X size={17} />
         </button>
@@ -59,17 +62,20 @@ export function MemoryDetailPanel({
       </div>
 
       <div className="detail-copy">
-        <h2>{memory.title}</h2>
-        <p>{memory.description}</p>
+        {memory.description ? <p>{memory.description}</p> : null}
         <div className="detail-meta">
-          <span>
-            <Calendar size={15} />
-            {date}
-          </span>
-          <span>
-            <MapPin size={15} />
-            {memory.locationName}
-          </span>
+          {date ? (
+            <span>
+              <Calendar size={15} />
+              {date}
+            </span>
+          ) : null}
+          {locationName ? (
+            <span>
+              <MapPin size={15} />
+              {locationName}
+            </span>
+          ) : null}
         </div>
       </div>
     </aside>

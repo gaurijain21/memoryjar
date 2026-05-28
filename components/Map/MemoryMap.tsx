@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useRef } from "react";
 import { GoogleMap, Marker, OverlayView, useJsApiLoader } from "@react-google-maps/api";
 import { Compass, LocateFixed, Minus, Plus } from "lucide-react";
-import type { Memory, SelectedLocation, ViewMode } from "@/types/memory";
+import { getReadableLocationName } from "@/lib/locationText";
+import type { AggregateMarker, Memory, SelectedLocation, ViewMode } from "@/types/memory";
 
 const libraries: ("places")[] = ["places"];
 const defaultCenter = { lat: 20, lng: 0 };
@@ -17,10 +18,13 @@ const worldBounds = {
 type MemoryMapProps = {
   memories: Memory[];
   selectedMemory?: Memory | null;
+  selectedAggregate?: AggregateMarker | null;
+  aggregateMarkers?: AggregateMarker[];
   draftLocation?: SelectedLocation | null;
   isPinDropMode: boolean;
   viewMode: ViewMode;
   onSelectMemory: (memory: Memory) => void;
+  onSelectAggregate: (marker: AggregateMarker) => void;
   onLocationSelected: (location: SelectedLocation) => void;
   onPinDropComplete: () => void;
 };
@@ -28,10 +32,13 @@ type MemoryMapProps = {
 export function MemoryMap({
   memories,
   selectedMemory,
+  selectedAggregate,
+  aggregateMarkers = [],
   draftLocation,
   isPinDropMode,
   viewMode,
   onSelectMemory,
+  onSelectAggregate,
   onLocationSelected,
   onPinDropComplete,
 }: MemoryMapProps) {
@@ -59,20 +66,36 @@ export function MemoryMap({
   const focusMemory = useCallback(
     (memory: Memory) => {
       onSelectMemory(memory);
-      mapRef.current?.panTo({ lat: memory.lat, lng: memory.lng });
-      mapRef.current?.setZoom(Math.max(mapRef.current.getZoom() ?? 4, 11));
     },
     [onSelectMemory],
   );
 
   const handleMapClick = useCallback(
-    (event: google.maps.MapMouseEvent) => {
+    async (event: google.maps.MapMouseEvent) => {
       if (!isPinDropMode || !event.latLng) return;
 
+      const lat = event.latLng.lat();
+      const lng = event.latLng.lng();
+      let locationName = "";
+
+      if (window.google?.maps?.Geocoder) {
+        try {
+          // Google Cloud setup note:
+          // The Maps JavaScript API must be enabled for the map itself, and the
+          // Geocoding API must also be enabled for reverse-geocoding dropped pins.
+          // If Geocoding is disabled, keep the pin usable and leave the name blank.
+          const geocoder = new google.maps.Geocoder();
+          const response = await geocoder.geocode({ location: { lat, lng } });
+          locationName = response.results[0]?.formatted_address ?? "";
+        } catch {
+          locationName = "";
+        }
+      }
+
       const selected = {
-        lat: event.latLng.lat(),
-        lng: event.latLng.lng(),
-        locationName: `Dropped pin (${event.latLng.lat().toFixed(4)}, ${event.latLng.lng().toFixed(4)})`,
+        lat,
+        lng,
+        locationName,
       };
 
       onLocationSelected(selected);
@@ -144,7 +167,6 @@ export function MemoryMap({
         </button>
       </div>
       <GoogleMap
-        center={selectedMemory ? { lat: selectedMemory.lat, lng: selectedMemory.lng } : defaultCenter}
         mapContainerClassName="google-map"
         onClick={handleMapClick}
         onLoad={(map) => {
@@ -170,7 +192,6 @@ export function MemoryMap({
           zoomControl: false,
           gestureHandling: "greedy",
         }}
-        zoom={selectedMemory ? 10 : 2}
       >
         {markerGroups.map(({ memory, count }) => (
           <OverlayView
@@ -187,7 +208,11 @@ export function MemoryMap({
                 className="aggregate-pin"
                 onClick={() => focusMemory(memory)}
                 type="button"
-                title={`${count} ${count === 1 ? "memory" : "memories"} at ${memory.locationName}`}
+                title={`${count} ${count === 1 ? "memory" : "memories"}${
+                  getReadableLocationName(memory.locationName)
+                    ? ` at ${getReadableLocationName(memory.locationName)}`
+                    : ""
+                }`}
               >
                 <span className="aggregate-count">{count}</span>
               </button>
@@ -208,6 +233,34 @@ export function MemoryMap({
             )}
           </OverlayView>
         ))}
+        {isEveryoneView
+          ? aggregateMarkers.map((marker) => {
+              const locationName = getReadableLocationName(marker.locationName);
+
+              return (
+                <OverlayView
+                  getPixelPositionOffset={(width, height) => ({
+                    x: -(width / 2),
+                    y: -height,
+                  })}
+                  key={marker.id}
+                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                  position={{ lat: marker.lat, lng: marker.lng }}
+                >
+                  <button
+                    className={`aggregate-pin ${selectedAggregate?.id === marker.id ? "active" : ""}`}
+                    onClick={() => onSelectAggregate(marker)}
+                    title={`${marker.count} ${marker.count === 1 ? "memory" : "memories"}${
+                      locationName ? ` at ${locationName}` : ""
+                    }`}
+                    type="button"
+                  >
+                    <span className="aggregate-count">{marker.count}</span>
+                  </button>
+                </OverlayView>
+              );
+            })
+          : null}
         {draftLocation ? (
           <Marker
             draggable

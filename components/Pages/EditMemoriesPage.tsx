@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Calendar, MapPin, Trash2, Edit3, ImageIcon } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { formatMemoryDate } from "@/lib/formatDate";
+import { getReadableLocationName } from "@/lib/locationText";
 import { subscribeToMemories, deleteMemory } from "@/lib/memories";
 import { subscribeToGroupMemories, deleteGroupMemory } from "@/lib/groups";
 import type { Memory } from "@/types/memory";
 
 export function EditMemoriesPage() {
+  const router = useRouter();
   const { user, viewMode, currentGroup, setCurrentPage, setMemoryToEdit } = useApp();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,6 +82,22 @@ export function EditMemoriesPage() {
     setCurrentPage("main");
   };
 
+  const handleBack = () => {
+    const previousPage = sessionStorage.getItem("memoryJarPreviousPage");
+    if (previousPage === "view-groups") {
+      sessionStorage.removeItem("memoryJarPreviousPage");
+      setCurrentPage("view-groups");
+      return;
+    }
+
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    setCurrentPage(isGroupView ? "view-groups" : "main");
+  };
+
   const pageTitle = isGroupView && currentGroup 
     ? `${currentGroup.name} Memories` 
     : "My Memories";
@@ -88,7 +107,7 @@ export function EditMemoriesPage() {
       <div className="page-header">
         <button 
           className="back-button" 
-          onClick={() => setCurrentPage("main")} 
+          onClick={handleBack} 
           type="button"
           aria-label="Back"
         >
@@ -109,7 +128,10 @@ export function EditMemoriesPage() {
         </div>
       ) : (
         <div className="memories-edit-list">
-          {memories.map((memory) => (
+          {memories.map((memory) => {
+            const locationName = getReadableLocationName(memory.locationName);
+
+            return (
             <div key={memory.id} className="memory-edit-card">
               <div className="memory-edit-image">
                 {memory.photoUrls.length > 0 ? (
@@ -128,10 +150,12 @@ export function EditMemoriesPage() {
                     <Calendar size={14} />
                     {formatMemoryDate(memory.date)}
                   </span>
-                  <span>
-                    <MapPin size={14} />
-                    {memory.locationName}
-                  </span>
+                  {locationName ? (
+                    <span>
+                      <MapPin size={14} />
+                      {locationName}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="memory-edit-actions">
@@ -154,7 +178,8 @@ export function EditMemoriesPage() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -27,6 +27,7 @@ export type SelectedLocation = {
 export type GroupMember = {
   uid: string;
   displayName: string;
+  email?: string | null;
   photoURL: string | null;
   joinedAt: Timestamp | FieldValue;
 };
@@ -53,6 +54,7 @@ export type AppPage = "main" | "edit-memories" | "view-groups" | "personal-info"
 
 // Aggregate marker for "Everyone's Memories" view
 export type AggregateMarker = {
+  id: string;
   lat: number;
   lng: number;
   count: number;

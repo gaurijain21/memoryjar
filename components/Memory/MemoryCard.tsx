@@ -1,7 +1,6 @@
 "use client";
 
 import { MapPin } from "lucide-react";
-import { formatMemoryDate } from "@/lib/formatDate";
 import type { Memory } from "@/types/memory";
 
 type MemoryCardProps = {
@@ -11,8 +10,6 @@ type MemoryCardProps = {
 };
 
 export function MemoryCard({ memory, isActive, onClick }: MemoryCardProps) {
-  const date = formatMemoryDate(memory.date);
-
   return (
     <button
       className={`memory-card ${isActive ? "active" : ""}`}
@@ -26,11 +23,6 @@ export function MemoryCard({ memory, isActive, onClick }: MemoryCardProps) {
         ) : (
           <MapPin size={24} />
         )}
-      </div>
-      <div>
-        <strong>{memory.title}</strong>
-        <span>{date}</span>
-        <small>{memory.locationName}</small>
       </div>
     </button>
   );

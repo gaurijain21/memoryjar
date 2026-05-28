@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { LoginScreen } from "@/components/Auth/LoginScreen";
 import { AddMemoryModal } from "@/components/Memory/AddMemoryModal";
+import { AggregateDetailPanel } from "@/components/Memory/AggregateDetailPanel";
 import { MemoryDetailPanel } from "@/components/Memory/MemoryDetailPanel";
 import { MemoryTimeline } from "@/components/Timeline/MemoryTimeline";
 import { TopNavBar } from "@/components/Navigation/TopNavBar";
@@ -21,7 +22,8 @@ import {
   subscribeToGroupMemories,
   updateGroupMemory,
 } from "@/lib/groups";
-import type { Memory, MemoryInput, SelectedLocation } from "@/types/memory";
+import { subscribeToMemoryLocationAggregates } from "@/lib/aggregates";
+import type { AggregateMarker, Memory, MemoryInput, SelectedLocation } from "@/types/memory";
 
 const MemoryMap = dynamic(
   () => import("@/components/Map/MemoryMap").then((module) => module.MemoryMap),
@@ -47,6 +49,8 @@ export function MemoryJarApp() {
   } = useApp();
 
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [aggregateMarkers, setAggregateMarkers] = useState<AggregateMarker[]>([]);
+  const [selectedAggregate, setSelectedAggregate] = useState<AggregateMarker | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
@@ -65,8 +69,14 @@ export function MemoryJarApp() {
     if (viewMode === "everyone") {
       setMemories([]);
       setSelectedMemory(null);
-      return;
+      return subscribeToMemoryLocationAggregates(
+        (markers) => setAggregateMarkers(markers.filter((marker) => marker.count > 0)),
+        (snapshotError) => setError(snapshotError.message),
+      );
     }
+
+    setAggregateMarkers([]);
+    setSelectedAggregate(null);
 
     if (viewMode === "my-memories") {
       return subscribeToMemories(
@@ -234,11 +244,14 @@ export function MemoryJarApp() {
       <div className="map-container">
         <MemoryMap
           draftLocation={selectedLocation}
+          aggregateMarkers={aggregateMarkers}
           isPinDropMode={isPinDropMode}
           memories={memories}
+          selectedAggregate={selectedAggregate}
           viewMode={viewMode}
           onLocationSelected={setSelectedLocation}
           onPinDropComplete={() => setIsPinDropMode(false)}
+          onSelectAggregate={setSelectedAggregate}
           onSelectMemory={setSelectedMemory}
           selectedMemory={selectedMemory}
         />
@@ -247,6 +260,11 @@ export function MemoryJarApp() {
       <MemoryDetailPanel
         memory={viewMode === "everyone" ? null : selectedMemory}
         onClose={() => setSelectedMemory(null)}
+      />
+
+      <AggregateDetailPanel
+        marker={viewMode === "everyone" ? selectedAggregate : null}
+        onClose={() => setSelectedAggregate(null)}
       />
 
       <MemoryTimeline

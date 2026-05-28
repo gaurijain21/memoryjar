@@ -4,6 +4,7 @@ import { ArrowLeft, Mail, User } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useApp } from "@/contexts/AppContext";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export function PersonalInfoPage() {
   const { user, setCurrentPage } = useApp();
@@ -26,14 +27,12 @@ export function PersonalInfoPage() {
 
       <div className="personal-info-card">
         <div className="personal-info-avatar">
-          {user.photoURL ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.photoURL} alt="" />
-          ) : (
-            <div className="avatar-placeholder">
-              <User size={40} />
-            </div>
-          )}
+          <UserAvatar
+            className="personal-avatar"
+            email={user.email}
+            name={user.displayName}
+            photoURL={user.photoURL}
+          />
         </div>
 
         <div className="personal-info-details">

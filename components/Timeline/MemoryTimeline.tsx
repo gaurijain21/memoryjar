@@ -36,7 +36,7 @@ export function MemoryTimeline({
   return (
     <section
       className={`timeline-panel ${isExpanded ? "expanded" : "collapsed"}`}
-      aria-label="Your Memories"
+      aria-label="Timeline"
     >
       <button
         aria-label={isExpanded ? "Collapse memories" : "Expand memories"}
@@ -44,12 +44,12 @@ export function MemoryTimeline({
         onClick={() => setIsExpanded((current) => !current)}
         type="button"
       >
-        <span>Your Memories</span>
+        <span>Timeline</span>
         {isExpanded ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
       </button>
       <div className="timeline-header">
         <div>
-          <h2>Your Memories</h2>
+          <h2>Timeline</h2>
         </div>
       </div>
       <div className="year-row">

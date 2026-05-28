@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowLeft, Users, Crown, Trash2, LogOut, Check, Link2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { UserAvatar } from "@/components/UserAvatar";
 import { deleteGroup, leaveGroup, removeMember } from "@/lib/groups";
 import type { Group } from "@/types/memory";
 
@@ -14,9 +15,10 @@ export function ViewGroupsPage() {
   const [copiedGroupId, setCopiedGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleViewGroup = (group: Group) => {
+  const handleGroupMemories = (group: Group) => {
+    sessionStorage.setItem("memoryJarPreviousPage", "view-groups");
     setViewMode(`group-${group.id}`);
-    setCurrentPage("main");
+    setCurrentPage("edit-memories");
   };
 
   const handleCopyLink = async (group: Group) => {
@@ -78,6 +80,15 @@ export function ViewGroupsPage() {
 
   const handleRemoveMember = async (group: Group, memberUid: string, memberName: string) => {
     if (!user) return;
+    if (memberUid === group.ownerId) {
+      setError("The owner cannot be removed.");
+      return;
+    }
+    if (memberUid === user.uid) {
+      setError("Use Leave Group to remove yourself.");
+      return;
+    }
+
     const confirmed = window.confirm(`Remove ${memberName} from "${group.name}"?`);
     if (!confirmed) return;
 
@@ -150,7 +161,7 @@ export function ViewGroupsPage() {
                     <div className="group-card-actions">
                       <button 
                         className="group-action-button"
-                        onClick={() => handleViewGroup(group)}
+                        onClick={() => handleGroupMemories(group)}
                         type="button"
                       >
                         Group Memories
@@ -184,32 +195,49 @@ export function ViewGroupsPage() {
                     <div className="group-members-section">
                       <h4>Members</h4>
                       <div className="group-members-list">
-                        {Object.values(group.members).filter(Boolean).map((member) => (
-                          <div key={member.uid} className="group-member">
-                            {member.photoURL ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={member.photoURL} alt="" className="member-avatar" />
-                            ) : (
-                              <div className="member-avatar-placeholder" />
-                            )}
-                            <span className="member-name">
-                              {member.displayName}
-                              {member.uid === group.ownerId && (
-                                <Crown size={12} className="member-crown" />
-                              )}
-                            </span>
-                            {isOwner && member.uid !== user?.uid && (
+                        {Object.values(group.members).filter(Boolean).map((member) => {
+                          const isGroupOwner = member.uid === group.ownerId;
+                          const memberLabel = member.displayName || member.email || "Member";
+
+                          return (
+                            <div key={member.uid} className="group-member">
+                              <UserAvatar
+                                className="member-avatar"
+                                email={member.email}
+                                name={member.displayName}
+                                photoURL={member.photoURL}
+                              />
+                              <div className="member-copy">
+                                <div className="member-name-row">
+                                  <span className="member-name">{memberLabel}</span>
+                                  {isGroupOwner ? (
+                                    <span className="owner-badge">
+                                      <Crown size={12} />
+                                      Owner
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {member.email ? <span className="member-email">{member.email}</span> : null}
+                              </div>
                               <button
                                 className="remove-member-button"
-                                onClick={() => handleRemoveMember(group, member.uid, member.displayName)}
+                                disabled={isGroupOwner || member.uid === user?.uid}
+                                onClick={() => handleRemoveMember(group, member.uid, memberLabel)}
                                 type="button"
-                                aria-label={`Remove ${member.displayName}`}
+                                aria-label={`Remove ${memberLabel}`}
+                                title={
+                                  isGroupOwner
+                                    ? "The owner cannot be removed"
+                                    : member.uid === user?.uid
+                                      ? "Use Leave Group to remove yourself"
+                                      : `Remove ${memberLabel}`
+                                }
                               >
                                 <Trash2 size={14} />
                               </button>
-                            )}
-                          </div>
-                        ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 

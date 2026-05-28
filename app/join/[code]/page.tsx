@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, signInWithPopup, type User } from "firebase/auth";
+import { onAuthStateChanged, signInWithRedirect, type User } from "firebase/auth";
 import { MapPinned, Users, Loader2 } from "lucide-react";
 import { auth, googleProvider } from "@/lib/firebase";
 import { getGroupByJoinCode, joinGroupByCode } from "@/lib/groups";
@@ -29,8 +29,10 @@ export default function JoinPage({ params }: JoinPageProps) {
     });
   }, []);
 
-  // Validate the group code
+  // Validate the group code after sign-in. Logged-out users see the invite prompt first.
   useEffect(() => {
+    if (!authReady || !user) return;
+
     async function validateCode() {
       try {
         const group = await getGroupByJoinCode(code);
@@ -44,7 +46,7 @@ export default function JoinPage({ params }: JoinPageProps) {
       }
     }
     validateCode();
-  }, [code]);
+  }, [authReady, code, user]);
 
   // Auto-join if user is already logged in
   useEffect(() => {
@@ -58,8 +60,8 @@ export default function JoinPage({ params }: JoinPageProps) {
     setIsSigningIn(true);
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
-      // After sign in, the auth state change will trigger auto-join
+      sessionStorage.setItem("pendingJoinCode", code);
+      await signInWithRedirect(auth, googleProvider);
     } catch {
       setError("Failed to sign in. Please try again.");
       setIsSigningIn(false);
@@ -75,13 +77,18 @@ export default function JoinPage({ params }: JoinPageProps) {
     try {
       const result = await joinGroupByCode(
         user.uid,
-        { displayName: user.displayName ?? "User", photoURL: user.photoURL },
+        {
+          displayName: user.displayName ?? user.email ?? "User",
+          email: user.email,
+          photoURL: user.photoURL,
+        },
         code
       );
 
       if (result.success && result.groupId) {
         // Store the group to select after redirect
         sessionStorage.setItem("joinedGroupId", result.groupId);
+        sessionStorage.removeItem("pendingJoinCode");
         router.push("/");
       } else {
         setError(result.error ?? "Failed to join group");
@@ -144,7 +151,7 @@ export default function JoinPage({ params }: JoinPageProps) {
               <Users size={24} />
             </div>
             <h2>You&apos;re invited!</h2>
-            {groupName && <p>Join <strong>{groupName}</strong> on Memory Jar</p>}
+            <p>Sign in with Google to accept this Memory Jar group invite.</p>
           </div>
 
           {error && <div className="join-error">{error}</div>}

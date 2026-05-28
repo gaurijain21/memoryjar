@@ -45,13 +45,14 @@ function generateJoinCode(): string {
 // Create a new group
 export async function createGroup(
   uid: string,
-  userInfo: { displayName: string; photoURL: string | null },
+  userInfo: { displayName: string; email?: string | null; photoURL: string | null },
   input: GroupInput
 ): Promise<string> {
   const joinCode = generateJoinCode();
   const memberData: GroupMember = {
     uid,
     displayName: userInfo.displayName,
+    email: userInfo.email ?? null,
     photoURL: userInfo.photoURL,
     joinedAt: serverTimestamp(),
   };
@@ -120,7 +121,7 @@ export async function getGroupByJoinCode(joinCode: string): Promise<Group | null
 // Join a group by code
 export async function joinGroupByCode(
   uid: string,
-  userInfo: { displayName: string; photoURL: string | null },
+  userInfo: { displayName: string; email?: string | null; photoURL: string | null },
   joinCode: string
 ): Promise<{ success: boolean; groupId?: string; error?: string }> {
   const group = await getGroupByJoinCode(joinCode);
@@ -135,6 +136,7 @@ export async function joinGroupByCode(
   const memberData: GroupMember = {
     uid,
     displayName: userInfo.displayName,
+    email: userInfo.email ?? null,
     photoURL: userInfo.photoURL,
     joinedAt: serverTimestamp(),
   };
@@ -162,7 +164,7 @@ export async function leaveGroup(uid: string, groupId: string): Promise<void> {
   });
 }
 
-// Remove a member from a group (owner only)
+// Remove a member from a group. Members can remove non-owner members.
 export async function removeMember(
   requestingUid: string,
   groupId: string,
@@ -171,12 +173,16 @@ export async function removeMember(
   const group = await getGroup(groupId);
   if (!group) throw new Error("Group not found");
   
-  if (group.ownerId !== requestingUid) {
-    throw new Error("Only the owner can remove members");
+  if (!group.memberIds.includes(requestingUid)) {
+    throw new Error("Only group members can remove members");
+  }
+
+  if (memberUid === requestingUid) {
+    throw new Error("Use Leave Group to remove yourself");
   }
   
   if (memberUid === group.ownerId) {
-    throw new Error("Cannot remove the owner");
+    throw new Error("The owner cannot be removed");
   }
 
   await updateDoc(groupDoc(groupId), {

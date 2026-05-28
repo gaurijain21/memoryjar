@@ -26,7 +26,11 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
     try {
       const groupId = await createGroup(
         user.uid,
-        { displayName: user.displayName ?? "User", photoURL: user.photoURL },
+        {
+          displayName: user.displayName ?? user.email ?? "User",
+          email: user.email,
+          photoURL: user.photoURL,
+        },
         { name: groupName.trim() }
       );
       

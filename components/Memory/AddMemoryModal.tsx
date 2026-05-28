@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ImagePlus, MapPin, MousePointer2, Search, Trash2, X } from "lucide-react";
+import { ImagePlus, MapPin, MousePointer2, Trash2, X } from "lucide-react";
 import { PlaceSearch } from "@/components/Map/PlaceSearch";
 import type { Memory, MemoryInput, SelectedLocation } from "@/types/memory";
 
@@ -47,10 +47,10 @@ export function AddMemoryModal({
     const [savedYear = "", savedMonth = ""] = (editingMemory?.date ?? "").split("-");
     setYear(savedYear || new Date().getFullYear().toString());
     setMonth(savedMonth);
-    setLocationName(editingMemory?.locationName ?? selectedLocation?.locationName ?? "");
+    setLocationName(editingMemory?.locationName ?? "");
     setPhotos([]);
     setPhotoUrlsToKeep(editingMemory?.photoUrls ?? []);
-  }, [editingMemory, isOpen, selectedLocation]);
+  }, [editingMemory, isOpen]);
 
   useEffect(() => {
     if (selectedLocation?.locationName) {
@@ -103,11 +103,39 @@ export function AddMemoryModal({
           </button>
         </div>
 
+        <div className="drawer-location-tools">
+          <span className="section-label">Location</span>
+          <PlaceSearch
+            className="drawer-place-search"
+            onPlaceSelected={(location) => {
+              onLocationSelected(location);
+              setLocationName(location.locationName);
+            }}
+            placeholder="Search location"
+          />
+          <button
+            className={`drop-pin-button ${pinDropMode ? "active" : ""}`}
+            onClick={onRequestPinDrop}
+            type="button"
+          >
+            <MousePointer2 size={16} />
+            {pinDropMode ? "Click on the map" : "Drop pin on map"}
+          </button>
+        </div>
+
+        {(selectedLocation || editingMemory) && locationName ? (
+          <div className="location-chip">
+            <MapPin size={16} />
+            <span>{locationName}</span>
+          </div>
+        ) : null}
+
         <label>
           <span>Title</span>
           <input
             maxLength={50}
             onChange={(event) => setTitle(event.target.value)}
+            placeholder="Sunset in Lisbon"
             required
             value={title}
           />
@@ -118,6 +146,7 @@ export function AddMemoryModal({
           <textarea
             maxLength={150}
             onChange={(event) => setDescription(event.target.value)}
+            placeholder="A small note about what made this moment worth saving."
             rows={2}
             value={description}
           />
@@ -131,7 +160,7 @@ export function AddMemoryModal({
               min="01"
               onBlur={() => setMonth((current) => current ? current.padStart(2, "0") : "")}
               onChange={(event) => setMonth(event.target.value.slice(0, 2))}
-              placeholder="MM"
+              placeholder="06"
               type="number"
               value={month}
             />
@@ -142,45 +171,13 @@ export function AddMemoryModal({
               max="9999"
               min="1"
               onChange={(event) => setYear(event.target.value)}
-              placeholder="YYYY"
+              placeholder="2026"
               required
               type="number"
               value={year}
             />
           </label>
         </div>
-
-        <div className="drawer-location-tools">
-          <span className="section-label">Location</span>
-          <PlaceSearch
-            className="drawer-place-search"
-            onPlaceSelected={(location) => {
-              onLocationSelected(location);
-              setLocationName(location.locationName);
-            }}
-            placeholder="Search place for this memory"
-          />
-          <button
-            className={`drop-pin-button ${pinDropMode ? "active" : ""}`}
-            onClick={onRequestPinDrop}
-            type="button"
-          >
-            <MousePointer2 size={16} />
-            {pinDropMode ? "Click on the map" : "Drop pin on map"}
-          </button>
-        </div>
-
-        {selectedLocation || editingMemory ? (
-          <div className="location-chip">
-            <MapPin size={16} />
-            <span>{locationName || (selectedLocation ?? editingMemory)?.locationName}</span>
-          </div>
-        ) : (
-          <div className="location-chip muted">
-            <Search size={16} />
-            <span>Search or drop a pin to choose a location.</span>
-          </div>
-        )}
 
         <label className="photo-picker">
           <ImagePlus size={18} />
