@@ -240,7 +240,6 @@ export function AddMemoryModal({
               <div className="audience-inline-info">
                 <p>Private: only you can see this memory.</p>
                 <p>Public: visible in Everyone&apos;s Memories.</p>
-                <p>Group: visible only to group members.</p>
               </div>
             ) : null}
           </div>
