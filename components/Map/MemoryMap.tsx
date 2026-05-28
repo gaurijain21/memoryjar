@@ -15,6 +15,7 @@ const worldBounds = {
   east: 180,
 };
 const personalPinColor = "#f6c85f";
+const publicPinColor = "#3b82f6";
 const groupPinColors = ["#6cc7f5", "#8f7cff", "#3ddc97", "#ff8f70", "#d783ff", "#4fd1c5"];
 
 function getGroupPinColor(groupId?: string | null) {
@@ -26,6 +27,25 @@ function getGroupPinColor(groupId?: string | null) {
   }
 
   return groupPinColors[hash];
+}
+
+function getMemoryPinColor(memory: Memory) {
+  if (memory.audience === "public" && !memory.groupId) return publicPinColor;
+  return getGroupPinColor(memory.groupId);
+}
+
+function getAggregateVariant(marker: AggregateMarker) {
+  const publicCount = marker.publicCount ?? 0;
+  const privateCount = marker.privateCount ?? 0;
+  const groupCount = marker.groupCount ?? 0;
+  const variants = [
+    publicCount > 0 ? "public" : null,
+    privateCount > 0 ? "private" : null,
+    groupCount > 0 ? "group" : null,
+  ].filter(Boolean);
+
+  if (variants.length > 1) return "mixed";
+  return variants[0] ?? "private";
 }
 
 type MemoryMapProps = {
@@ -79,17 +99,30 @@ export function MemoryMap({
     };
   }, [isLoaded]);
 
-  const markerGroups = useMemo(() => {
+  const markerItems = useMemo(() => {
     const grouped = new Map<string, Memory[]>();
     memories.forEach((memory) => {
-      const key = `${memory.lat.toFixed(1)}:${memory.lng.toFixed(1)}`;
+      const key = `${memory.lat.toFixed(3)}:${memory.lng.toFixed(3)}`;
       grouped.set(key, [...(grouped.get(key) ?? []), memory]);
     });
 
-    return Array.from(grouped.values()).map((group) => ({
-      memory: group[0],
-      count: group.length,
-    }));
+    // Marker overlap handling: memories at the same or very close location get
+    // a tiny radial offset, keeping them visually clustered but individually clickable.
+    return Array.from(grouped.values()).flatMap((group) => {
+      if (group.length === 1) {
+        return [{ memory: group[0], lat: group[0].lat, lng: group[0].lng }];
+      }
+
+      return group.map((memory, index) => {
+        const angle = (Math.PI * 2 * index) / group.length;
+        const radius = 0.00016 + Math.floor(index / 8) * 0.00008;
+        return {
+          memory,
+          lat: memory.lat + Math.sin(angle) * radius,
+          lng: memory.lng + Math.cos(angle) * radius,
+        };
+      });
+    });
   }, [memories]);
 
   const focusMemory = useCallback(
@@ -210,7 +243,7 @@ export function MemoryMap({
           fullscreenControl: false,
           heading: 0,
           mapTypeControl: false,
-          mapTypeId: "hybrid",
+          mapTypeId: "roadmap",
           minZoom: 2,
           restriction: {
             latLngBounds: worldBounds,
@@ -222,16 +255,16 @@ export function MemoryMap({
           gestureHandling: "greedy",
         }}
       >
-        {markerGroups.map(({ memory, count }) => (
+        {markerItems.map(({ memory, lat, lng }) => (
           <OverlayView
             getPixelPositionOffset={() => ({ x: 0, y: 0 })}
             key={memory.id}
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-            position={{ lat: memory.lat, lng: memory.lng }}
+            position={{ lat, lng }}
           >
             <div
-              className="marker-anchor marker-anchor-pin"
-              style={{ "--pin-color": getGroupPinColor(memory.groupId) } as CSSProperties}
+              className={`marker-anchor marker-anchor-pin ${selectedMemory?.id === memory.id ? "active" : ""}`}
+              style={{ "--pin-color": getMemoryPinColor(memory) } as CSSProperties}
             >
               <button
                 className={`memory-pin ${selectedMemory?.id === memory.id ? "active" : ""}`}
@@ -244,7 +277,6 @@ export function MemoryMap({
                 ) : (
                   <span />
                 )}
-                {count > 1 ? <b>{count}</b> : null}
               </button>
             </div>
           </OverlayView>
@@ -252,6 +284,15 @@ export function MemoryMap({
         {isEveryoneView
           ? aggregateMarkers.map((marker) => {
               const locationName = getReadableLocationName(marker.locationName);
+              const variant = getAggregateVariant(marker);
+              console.info("[DEBUG everyone] render circle", {
+                id: marker.id,
+                count: marker.count,
+                publicCount: marker.publicCount ?? 0,
+                privateCount: marker.privateCount ?? 0,
+                groupCount: marker.groupCount ?? 0,
+                chosenColor: variant,
+              });
 
               return (
                 <OverlayView
@@ -260,9 +301,9 @@ export function MemoryMap({
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                   position={{ lat: marker.lat, lng: marker.lng }}
                 >
-                  <div className="marker-anchor marker-anchor-circle">
+                  <div className={`marker-anchor marker-anchor-circle ${selectedAggregate?.id === marker.id ? "active" : ""}`}>
                     <button
-                      className={`aggregate-pin ${selectedAggregate?.id === marker.id ? "active" : ""}`}
+                      className={`aggregate-pin aggregate-pin-${variant} ${selectedAggregate?.id === marker.id ? "active" : ""}`}
                       onClick={() => onSelectAggregate(marker)}
                       title={`${marker.count} ${marker.count === 1 ? "memory" : "memories"}${
                         locationName ? ` at ${locationName}` : ""

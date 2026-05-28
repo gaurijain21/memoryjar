@@ -1,4 +1,9 @@
 import {
+  decrementMemoryLocationAggregate,
+  incrementMemoryLocationAggregate,
+  moveMemoryLocationAggregate,
+} from "@/lib/aggregates";
+import {
   addDoc,
   collection,
   deleteDoc,
@@ -84,6 +89,11 @@ export function subscribeToUserGroups(
   onNext: (groups: Group[]) => void,
   onError: (error: Error) => void
 ) {
+  if (!uid?.trim()) {
+    onNext([]);
+    return () => {};
+  }
+
   const q = query(
     groupsCollection,
     where("memberIds", "array-contains", uid)
@@ -229,17 +239,35 @@ export async function deleteGroup(uid: string, groupId: string): Promise<void> {
   
   // Collect storage paths to delete
   const storagePaths: string[] = [];
+  const aggregateRemovals: Promise<void>[] = [];
   memoriesSnapshot.docs.forEach((memDoc) => {
     const data = memDoc.data();
     if (data.storagePaths) {
       storagePaths.push(...data.storagePaths);
     }
+    aggregateRemovals.push(decrementMemoryLocationAggregate({
+      lat: data.lat,
+      lng: data.lng,
+      placeId: data.placeId ?? null,
+      placeName: data.placeName ?? null,
+      formattedAddress: data.formattedAddress ?? null,
+      locationName: data.locationName ?? "Memory location",
+      locationSource: data.locationSource ?? "pin",
+      placePhotoReference: data.placePhotoReference ?? null,
+      date: data.date ?? "",
+      title: data.title ?? "",
+      description: data.description ?? "",
+      photoUrls: data.photoUrls ?? [],
+      storagePaths: data.storagePaths ?? [],
+      groupId,
+    }));
     batch.delete(memDoc.ref);
   });
 
   // Delete the group document
   batch.delete(groupDoc(groupId));
   await batch.commit();
+  await Promise.allSettled(aggregateRemovals);
 
   // Clean up storage
   await Promise.allSettled(
@@ -253,6 +281,11 @@ export function subscribeToGroupMemories(
   onNext: (memories: Memory[]) => void,
   onError: (error: Error) => void
 ) {
+  if (!groupId?.trim()) {
+    onNext([]);
+    return () => {};
+  }
+
   const q = query(groupMemoriesCollection(groupId), orderBy("date", "asc"));
 
   return onSnapshot(
@@ -314,6 +347,7 @@ export async function createGroupMemory(
     storagePaths: uploaded.map((photo) => photo.path),
     updatedAt: serverTimestamp(),
   });
+  await incrementMemoryLocationAggregate(input);
 
   return created.id;
 }
@@ -344,6 +378,7 @@ export async function updateGroupMemory(
     storagePaths: [...keptStoragePaths, ...uploaded.map((photo) => photo.path)],
     updatedAt: serverTimestamp(),
   });
+  await moveMemoryLocationAggregate(memory, input);
 }
 
 // Delete a group memory
@@ -352,4 +387,5 @@ export async function deleteGroupMemory(groupId: string, memory: Memory) {
     (memory.storagePaths ?? []).map((path) => deleteObject(ref(storage, path)))
   );
   await deleteDoc(groupMemoryDoc(groupId, memory.id));
+  await decrementMemoryLocationAggregate(memory);
 }

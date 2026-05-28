@@ -15,12 +15,20 @@ export type Memory = {
   lng: number;
   photoUrls: string[];
   storagePaths?: string[];
+  publicPhotoUrls?: string[];
+  publicStoragePaths?: string[];
   groupId?: string | null;
+  groupName?: string | null;
+  audience?: "private" | "public";
+  ownerId?: string;
+  sourceMemoryId?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };
 
 export type MemoryInput = Omit<Memory, "id" | "createdAt" | "updatedAt">;
+export type MemoryAudience = "private" | "public";
+export type MemoryDestination = "my-memories" | `group-${string}`;
 
 export type SelectedLocation = {
   locationName: string;
@@ -68,10 +76,22 @@ export type AggregateMarker = {
   lat: number;
   lng: number;
   count: number;
+  publicCount?: number;
+  privateCount?: number;
+  groupCount?: number;
   locationName: string;
   placeId?: string | null;
   placeName?: string | null;
   formattedAddress?: string | null;
   placePhotoReference?: string | null;
   locationSource?: "search" | "pin";
+  previewMemory?: Memory | null;
+  previewItems?: AggregatePreviewItem[];
+};
+
+export type AggregatePreviewItem = {
+  id: string;
+  type: "public" | "private" | "group";
+  memory?: Memory | null;
+  label?: string;
 };

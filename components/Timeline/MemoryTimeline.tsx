@@ -1,48 +1,67 @@
 "use client";
 
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Memory } from "@/types/memory";
-import { MemoryCard } from "@/components/Memory/MemoryCard";
 
 type MemoryTimelineProps = {
   memories: Memory[];
   selectedMemoryId?: string;
   onSelectMemory: (memory: Memory) => void;
-  rangeIndex: number;
-  onRangeChange: (index: number) => void;
 };
+
+type TimelineImage = {
+  key: string;
+  memory: Memory;
+  photoUrl: string | null;
+};
+
+function getMonthKey(date: string) {
+  const [year, month = "01"] = date.split("-");
+  return `${year}-${month.padStart(2, "0")}`;
+}
+
+function getMonthLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
 
 export function MemoryTimeline({
   memories,
   selectedMemoryId,
   onSelectMemory,
-  rangeIndex,
-  onRangeChange,
 }: MemoryTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const sorted = useMemo(() => {
-    const seen = new Set<string>();
+  const monthGroups = useMemo(() => {
+    const grouped = new Map<string, TimelineImage[]>();
 
-    return [...memories]
+    [...memories]
       .sort((a, b) => a.date.localeCompare(b.date))
-      .filter((memory) => {
-        const stableKey = `${memory.groupId ?? "private"}:${memory.id}:${memory.photoUrls[0] ?? "no-photo"}`;
-        if (seen.has(stableKey)) return false;
-        seen.add(stableKey);
-        return true;
+      .forEach((memory) => {
+        const monthKey = getMonthKey(memory.date);
+        const photos = memory.photoUrls.length > 0 ? memory.photoUrls : [null];
+
+        // Timeline grouping: every image is represented under its memory month,
+        // so multi-photo memories are not collapsed to a single thumbnail.
+        photos.forEach((photoUrl, photoIndex) => {
+          grouped.set(monthKey, [
+            ...(grouped.get(monthKey) ?? []),
+            {
+              key: `${memory.groupId ?? memory.ownerId ?? "memory"}:${memory.id}:${photoIndex}:${photoUrl ?? "pin"}`,
+              memory,
+              photoUrl,
+            },
+          ]);
+        });
       });
+
+    return Array.from(grouped.entries()).map(([monthKey, images]) => ({
+      monthKey,
+      label: getMonthLabel(monthKey),
+      images,
+    }));
   }, [memories]);
-  const selected = sorted[rangeIndex];
-  const years = useMemo(() => {
-    const memoryYears = sorted.map((memory) => Number(memory.date.split("-")[0])).filter(Boolean);
-    const fallback = new Date().getFullYear();
-    return {
-      start: memoryYears[0] ?? fallback,
-      current: selected ? Number(selected.date.split("-")[0]) || fallback : fallback,
-      end: memoryYears[memoryYears.length - 1] ?? fallback,
-    };
-  }, [selected, sorted]);
 
   return (
     <section
@@ -63,32 +82,34 @@ export function MemoryTimeline({
           <h2>Timeline</h2>
         </div>
       </div>
-      <div className="year-row">
-        <span>{years.start}</span>
-        <span>{years.current}</span>
-        <span>{years.end}</span>
-      </div>
-      <input
-        aria-label="Memory timeline"
-        className="timeline-range"
-        disabled={sorted.length < 2}
-        max={Math.max(sorted.length - 1, 0)}
-        min={0}
-        onChange={(event) => onRangeChange(Number(event.target.value))}
-        type="range"
-        value={Math.min(rangeIndex, Math.max(sorted.length - 1, 0))}
-      />
-      <div className="memory-strip">
-        {sorted.length === 0 ? (
+      <div className="timeline-month-strip">
+        {monthGroups.length === 0 ? (
           <div className="timeline-empty">No memories yet - add your first pin.</div>
         ) : null}
-        {sorted.map((memory) => (
-          <MemoryCard
-            isActive={memory.id === selectedMemoryId}
-            key={memory.id}
-            memory={memory}
-            onClick={onSelectMemory}
-          />
+        {monthGroups.map((group) => (
+          <div className="timeline-month" key={group.monthKey}>
+            <div className="timeline-month-label">{group.label}</div>
+            <div className="timeline-dot-line">
+              <span className="timeline-dot" />
+            </div>
+            <div className="timeline-month-images">
+              {group.images.map((item) => (
+                <button
+                  className={`timeline-image-card ${item.memory.id === selectedMemoryId ? "active" : ""}`}
+                  key={item.key}
+                  onClick={() => onSelectMemory(item.memory)}
+                  type="button"
+                >
+                  {item.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img alt="" src={item.photoUrl} />
+                  ) : (
+                    <MapPin size={22} />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>

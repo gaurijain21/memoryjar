@@ -13,7 +13,7 @@ import type { Memory } from "@/types/memory";
 
 export function EditMemoriesPage() {
   const router = useRouter();
-  const { user, viewMode, currentGroup, setCurrentPage, setMemoryToEdit } = useApp();
+  const { user, isAuthLoading, viewMode, currentGroup, setCurrentPage, setMemoryToEdit } = useApp();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -23,7 +23,10 @@ export function EditMemoriesPage() {
   const groupId = isGroupView ? viewMode.replace("group-", "") : null;
 
   useEffect(() => {
+    if (isAuthLoading) return undefined;
+
     if (!user) {
+      setMemories([]);
       setIsLoading(false);
       return;
     }
@@ -55,7 +58,7 @@ export function EditMemoriesPage() {
         }
       );
     }
-  }, [user, isGroupView, groupId]);
+  }, [user, isAuthLoading, isGroupView, groupId]);
 
   const handleDelete = async (memory: Memory) => {
     if (!user) return;

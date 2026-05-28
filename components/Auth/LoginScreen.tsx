@@ -70,6 +70,7 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isJoiningInvite, setIsJoiningInvite] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const joinAttemptedRef = useRef(false);
   const popupInProgressRef = useRef(false);
@@ -108,11 +109,19 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
   }, [inviteCode, isAuthLoading, user]);
 
   useEffect(() => {
+    if (!notice) return undefined;
+
+    const timeoutId = window.setTimeout(() => setNotice(null), 2600);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+
+  useEffect(() => {
     if (isAuthLoading || user) return;
 
     setIsSigningIn(false);
     setIsJoiningInvite(false);
     setError(null);
+    setNotice(null);
     joinAttemptedRef.current = false;
     popupInProgressRef.current = false;
 
@@ -200,6 +209,7 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
     popupInProgressRef.current = true;
     setIsSigningIn(true);
     setError(null);
+    setNotice(null);
 
     try {
       console.info("[MemoryJar invite] starting popup sign-in", {
@@ -217,17 +227,27 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
         router.replace("/");
       }
     } catch (signInError) {
-      console.error("[MemoryJar invite] Google sign-in failed", signInError);
       const firebaseError = signInError as { code?: string; message?: string };
+      const errorCode = firebaseError.code ?? null;
 
+      if (errorCode === "auth/popup-closed-by-user" || errorCode === "auth/cancelled-popup-request") {
+        console.info("[MemoryJar auth] popup sign-in cancelled", {
+          code: errorCode,
+          message: firebaseError.message ?? null,
+        });
+        setNotice("Sign-in was cancelled.");
+        return;
+      }
+
+      console.error("[MemoryJar invite] Google sign-in failed", signInError);
       console.error("[MemoryJar invite] Google sign-in error details", {
-        code: firebaseError.code ?? null,
+        code: errorCode,
         message: firebaseError.message ?? null,
       });
 
       setError(
-        firebaseError.code === "auth/popup-blocked"
-          ? "Popup sign-in was blocked. Please allow popups or try another browser."
+        errorCode === "auth/popup-blocked"
+          ? "Popup was blocked. Please allow popups or try again."
           : signInError instanceof Error
             ? `Google sign-in failed: ${signInError.message}`
             : "Google sign-in failed. Please try again.",
@@ -267,6 +287,7 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
         </p>
 
         {error ? <div className="join-error login-error">{error}</div> : null}
+        {notice ? <div className="login-note">{notice}</div> : null}
         
         <button
           className="google-signin-button"

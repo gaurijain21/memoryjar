@@ -75,7 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   
   // View mode
-  const [viewMode, setViewMode] = useState<ViewMode>("my-memories");
+  const [viewMode, setViewMode] = useState<ViewMode>("everyone");
   
   // Current page
   const [currentPage, setCurrentPage] = useState<AppPage>("main");

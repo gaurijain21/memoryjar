@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ImagePlus, MapPin, MousePointer2, Trash2, X } from "lucide-react";
+import { ImagePlus, Info, MapPin, MousePointer2, Trash2, X } from "lucide-react";
 import { PlaceSearch } from "@/components/Map/PlaceSearch";
-import type { Memory, MemoryInput, SelectedLocation } from "@/types/memory";
+import type { Group, Memory, MemoryAudience, MemoryDestination, MemoryInput, SelectedLocation } from "@/types/memory";
 
 type AddMemoryModalProps = {
   isOpen: boolean;
@@ -11,6 +11,8 @@ type AddMemoryModalProps = {
   editingMemory?: Memory | null;
   selectedLocation?: SelectedLocation | null;
   pinDropMode: boolean;
+  groups: Group[];
+  defaultDestination: MemoryDestination;
   onLocationSelected: (location: SelectedLocation) => void;
   onRequestPinDrop: () => void;
   onClose: () => void;
@@ -18,6 +20,7 @@ type AddMemoryModalProps = {
     input: MemoryInput,
     photos: File[],
     photoUrlsToKeep: string[],
+    options: { destination: MemoryDestination; audience: MemoryAudience },
   ) => Promise<void>;
 };
 
@@ -27,6 +30,8 @@ export function AddMemoryModal({
   editingMemory,
   selectedLocation,
   pinDropMode,
+  groups,
+  defaultDestination,
   onLocationSelected,
   onRequestPinDrop,
   onClose,
@@ -39,9 +44,17 @@ export function AddMemoryModal({
   const [locationName, setLocationName] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoUrlsToKeep, setPhotoUrlsToKeep] = useState<string[]>([]);
+  const [destination, setDestination] = useState<MemoryDestination>("my-memories");
+  const [audience, setAudience] = useState<MemoryAudience>("private");
+  const [showAudienceInfo, setShowAudienceInfo] = useState(false);
+  const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
+    const editingDestination = editingMemory?.groupId
+      ? (`group-${editingMemory.groupId}` as MemoryDestination)
+      : "my-memories";
+
     setTitle(editingMemory?.title ?? "");
     setDescription(editingMemory?.description ?? "");
     const [savedYear = "", savedMonth = ""] = (editingMemory?.date ?? "").split("-");
@@ -50,7 +63,11 @@ export function AddMemoryModal({
     setLocationName(editingMemory?.locationName ?? "");
     setPhotos([]);
     setPhotoUrlsToKeep(editingMemory?.photoUrls ?? []);
-  }, [editingMemory, isOpen]);
+    setDestination(editingMemory ? editingDestination : defaultDestination);
+    setAudience(editingMemory?.audience ?? "private");
+    setShowAudienceInfo(false);
+    setValidationError("");
+  }, [defaultDestination, editingMemory, isOpen]);
 
   useEffect(() => {
     if (selectedLocation?.locationName) {
@@ -67,12 +84,47 @@ export function AddMemoryModal({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!title.trim() || !year.trim() || (!selectedLocation && !editingMemory)) return;
+    const hasLocation = Boolean(selectedLocation || editingMemory);
+    const hasImage = photos.length > 0 || photoUrlsToKeep.length > 0;
+    const hasDate = Boolean(month.trim() && year.trim());
+    const hasDestination = Boolean(destination);
+    const hasVisibility = destination !== "my-memories" || Boolean(audience);
+
+    if (!hasLocation) {
+      setValidationError("Choose a location before saving.");
+      return;
+    }
+
+    if (!hasDestination) {
+      setValidationError("Choose where to add this memory.");
+      return;
+    }
+
+    if (!title.trim()) {
+      setValidationError("Add a title before saving.");
+      return;
+    }
+
+    if (!hasDate) {
+      setValidationError("Add a month and year before saving.");
+      return;
+    }
+
+    if (!hasVisibility) {
+      setValidationError("Choose Private or Public before saving.");
+      return;
+    }
+
+    if (!hasImage) {
+      setValidationError("Add at least one image before saving.");
+      return;
+    }
 
     const location = selectedLocation ?? editingMemory;
     if (!location) return;
 
     const normalizedDate = month ? `${year}-${month}` : year;
+    setValidationError("");
 
     await onSubmit(
       {
@@ -89,15 +141,21 @@ export function AddMemoryModal({
         placePhotoReference: location.placePhotoReference ?? editingMemory?.placePhotoReference ?? null,
         photoUrls: photoUrlsToKeep,
         storagePaths: editingMemory?.storagePaths ?? [],
+        audience: destination === "my-memories" ? audience : "private",
+        groupId: destination.startsWith("group-") ? destination.replace("group-", "") : null,
       },
       photos,
       photoUrlsToKeep,
+      {
+        destination,
+        audience: destination === "my-memories" ? audience : "private",
+      },
     );
   };
 
   return (
     <div className="drawer-layer">
-      <form className={`memory-modal ${pinDropMode ? "pin-mode" : ""}`} onSubmit={handleSubmit}>
+      <form className={`memory-modal ${pinDropMode ? "pin-mode" : ""}`} noValidate onSubmit={handleSubmit}>
         <div className="modal-title-row">
           <div>
             <p className="eyebrow">{editingMemory ? "Edit memory" : "Capture life, drop a pin!"}</p>
@@ -137,6 +195,62 @@ export function AddMemoryModal({
         ) : null}
 
         <label>
+          <span>Add to</span>
+          <select
+            className="memory-select"
+            disabled={Boolean(editingMemory)}
+            onChange={(event) => setDestination(event.target.value as MemoryDestination)}
+            required
+            value={destination}
+          >
+            <option value="my-memories">My Memories</option>
+            {groups.map((group) => (
+              <option key={group.id} value={`group-${group.id}`}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {destination === "my-memories" ? (
+          <div className="audience-field">
+            <span className="section-label">Visibility</span>
+            <div className="audience-toggle-row">
+              <span>Private</span>
+              <button
+                aria-label="Toggle memory visibility"
+                aria-pressed={audience === "public"}
+                className={`audience-switch ${audience === "public" ? "public" : "private"}`}
+                onClick={() => setAudience((current) => current === "private" ? "public" : "private")}
+                type="button"
+              >
+                <span />
+              </button>
+              <span>Public</span>
+              <button
+                className="audience-info"
+                aria-label="Show visibility info"
+                onClick={() => setShowAudienceInfo((current) => !current)}
+                type="button"
+              >
+                <Info size={14} />
+              </button>
+            </div>
+            {showAudienceInfo ? (
+              <div className="audience-inline-info">
+                <p>Private: only you can see this memory.</p>
+                <p>Public: visible in Everyone&apos;s Memories.</p>
+                <p>Group: visible only to group members.</p>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="audience-note">
+            This memory will be visible only to members of the selected group.
+          </p>
+        )}
+
+        <label>
           <span>Title</span>
           <input
             maxLength={50}
@@ -161,12 +275,13 @@ export function AddMemoryModal({
         <div className="form-grid">
           <label>
             <span>Month</span>
-            <input
+          <input
               max="12"
               min="01"
               onBlur={() => setMonth((current) => current ? current.padStart(2, "0") : "")}
               onChange={(event) => setMonth(event.target.value.slice(0, 2))}
               placeholder="06"
+              required
               type="number"
               value={month}
             />
@@ -224,9 +339,11 @@ export function AddMemoryModal({
           ))}
         </div>
 
+        {validationError ? <p className="memory-validation-error">{validationError}</p> : null}
+
         <button
           className="primary-button"
-          disabled={isSaving || !title.trim() || !year.trim() || (!selectedLocation && !editingMemory)}
+          disabled={isSaving}
           type="submit"
         >
           {isSaving ? "Saving..." : editingMemory ? "Update memory" : "Save memory"}
