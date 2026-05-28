@@ -55,7 +55,7 @@ export async function createGroup(
   uid: string,
   userInfo: { displayName: string; email?: string | null; photoURL: string | null },
   input: GroupInput
-): Promise<string> {
+): Promise<{ id: string; joinCode: string }> {
   const joinCode = generateJoinCode();
   const memberData: GroupMember = {
     uid,
@@ -75,7 +75,7 @@ export async function createGroup(
   };
 
   const created = await addDoc(groupsCollection, groupData);
-  return created.id;
+  return { id: created.id, joinCode };
 }
 
 // Subscribe to groups where user is a member

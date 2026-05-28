@@ -60,7 +60,7 @@ service cloud.firestore {
     }
 
     match /memoryLocationAggregates/{aggregateId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create, update: if signedIn()
         && request.resource.data.keys().hasOnly([
           "lat",

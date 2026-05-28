@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X, Copy, Check, Link2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
-import { createGroup, getGroup } from "@/lib/groups";
+import { createGroup } from "@/lib/groups";
 import { trackButtonClick, trackGroupCreated } from "@/lib/analytics";
 
 interface CreateGroupModalProps {
@@ -25,7 +25,7 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
     setError(null);
 
     try {
-      const groupId = await createGroup(
+      const group = await createGroup(
         user.uid,
         {
           displayName: user.displayName ?? user.email ?? "User",
@@ -34,12 +34,8 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
         },
         { name: groupName.trim() }
       );
-      trackGroupCreated(groupId);
-      
-      const group = await getGroup(groupId);
-      if (group) {
-        setCreatedGroup({ id: groupId, joinCode: group.joinCode, name: group.name });
-      }
+      trackGroupCreated(group.id);
+      setCreatedGroup({ id: group.id, joinCode: group.joinCode, name: groupName.trim() });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create group");
     } finally {

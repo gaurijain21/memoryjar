@@ -17,7 +17,15 @@ interface TopNavBarProps {
 }
 
 export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
-  const { user, viewMode, setCurrentPage, requestLogin, currentGroup } = useApp();
+  const {
+    user,
+    viewMode,
+    pendingAction,
+    setPendingAction,
+    setCurrentPage,
+    requestLogin,
+    currentGroup,
+  } = useApp();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
@@ -37,6 +45,12 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!user || pendingAction?.type !== "create-group") return;
+    setIsCreateGroupOpen(true);
+    setPendingAction(null);
+  }, [pendingAction, setPendingAction, user]);
 
   const handleProfileAction = (action: "personal-info" | "view-groups" | "edit-memories" | "logout") => {
     setIsProfileMenuOpen(false);
@@ -117,7 +131,7 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
                   trackEvent("create_group_clicked", { selected_view: viewMode });
                   trackButtonClick("create_group", "view_dropdown", { selected_view: viewMode });
                   if (!user) {
-                    requestLogin({ type: "view-groups" });
+                    requestLogin({ type: "create-group" });
                     return;
                   }
                   setIsCreateGroupOpen(true);

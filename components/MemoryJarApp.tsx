@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { LoginScreen } from "@/components/Auth/LoginScreen";
 import { AddMemoryModal } from "@/components/Memory/AddMemoryModal";
@@ -67,6 +67,19 @@ export function MemoryJarApp() {
   const [rangeIndex, setRangeIndex] = useState(0);
   const [isPinDropMode, setIsPinDropMode] = useState(false);
 
+  const handleSubscriptionError = useCallback((snapshotError: Error & { code?: string }) => {
+    const isPermissionNoise =
+      snapshotError.code === "permission-denied"
+      || snapshotError.message.toLowerCase().includes("missing or insufficient permissions");
+
+    if (isPermissionNoise) {
+      console.warn("[MemoryJar] Suppressed passive Firestore permission snapshot error", snapshotError);
+      return;
+    }
+
+    setError(snapshotError.message);
+  }, []);
+
   const sourceType = currentGroupId
     ? "group"
     : viewMode === "all-memories"
@@ -76,9 +89,14 @@ export function MemoryJarApp() {
         : "my_memories";
 
   useEffect(() => {
-    if (!user || currentPage !== "main") return;
+    if (currentPage !== "main") return;
     trackEvent("home_map_view", { selected_view: viewMode });
-  }, [currentPage, user, viewMode]);
+  }, [currentPage, viewMode]);
+
+  useEffect(() => {
+    if (user || isAuthLoading) return;
+    if (viewMode !== "everyone") setViewMode("everyone");
+  }, [isAuthLoading, setViewMode, user, viewMode]);
 
   useEffect(() => {
     if (!user) return;
@@ -91,7 +109,12 @@ export function MemoryJarApp() {
   useEffect(() => {
     if (!user) {
       setMemories([]);
-      return;
+      setSelectedMemory(null);
+      if (viewMode !== "everyone") setViewMode("everyone");
+      return subscribeToMemoryLocationAggregates(
+        (markers) => setAggregateMarkers(markers.filter((marker) => marker.count > 0)),
+        handleSubscriptionError,
+      );
     }
 
     if (viewMode === "everyone") {
@@ -99,7 +122,7 @@ export function MemoryJarApp() {
       setSelectedMemory(null);
       return subscribeToMemoryLocationAggregates(
         (markers) => setAggregateMarkers(markers.filter((marker) => marker.count > 0)),
-        (snapshotError) => setError(snapshotError.message),
+        handleSubscriptionError,
       );
     }
 
@@ -129,7 +152,7 @@ export function MemoryJarApp() {
             );
             updateCombinedMemories();
           },
-          (snapshotError) => setError(snapshotError.message),
+          handleSubscriptionError,
         ),
       ];
 
@@ -148,7 +171,7 @@ export function MemoryJarApp() {
               );
               updateCombinedMemories();
             },
-            (snapshotError) => setError(snapshotError.message),
+            handleSubscriptionError,
           ),
         );
       });
@@ -160,7 +183,7 @@ export function MemoryJarApp() {
       return subscribeToMemories(
         user.uid,
         setMemories,
-        (snapshotError) => setError(snapshotError.message),
+        handleSubscriptionError,
       );
     }
 
@@ -169,10 +192,10 @@ export function MemoryJarApp() {
       return subscribeToGroupMemories(
         currentGroupId,
         setMemories,
-        (snapshotError) => setError(snapshotError.message),
+        handleSubscriptionError,
       );
     }
-  }, [user, viewMode, currentGroupId, groups, setSelectedMemory]);
+  }, [user, viewMode, currentGroupId, groups, setSelectedMemory, setViewMode, handleSubscriptionError]);
 
   // Handle joined group from session storage (after join page redirect)
   useEffect(() => {
@@ -298,18 +321,11 @@ export function MemoryJarApp() {
   };
 
   // Can add memory only into a concrete personal or group context.
-  const canAddMemory = viewMode !== "everyone" && viewMode !== "all-memories";
-
-  if (isAuthLoading) {
-    return <main className="loading-shell">Opening Memory Jar...</main>;
-  }
-
-  if (!user) {
-    return <LoginScreen />;
-  }
+  const canAddMemory = !user || (viewMode !== "everyone" && viewMode !== "all-memories");
+  const showLoginPrompt = !user && pendingAction !== null;
 
   // Render different pages based on currentPage
-  if (currentPage === "view-groups") {
+  if (user && currentPage === "view-groups") {
     return (
       <div className="app-shell-with-nav">
         <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
@@ -318,7 +334,7 @@ export function MemoryJarApp() {
     );
   }
 
-  if (currentPage === "personal-info") {
+  if (user && currentPage === "personal-info") {
     return (
       <div className="app-shell-with-nav">
         <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
@@ -327,7 +343,7 @@ export function MemoryJarApp() {
     );
   }
 
-  if (currentPage === "edit-memories") {
+  if (user && currentPage === "edit-memories") {
     return (
       <div className="app-shell-with-nav">
         <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
@@ -388,6 +404,13 @@ export function MemoryJarApp() {
         pinDropMode={isPinDropMode}
         selectedLocation={selectedLocation}
       />
+
+      {showLoginPrompt ? (
+        <LoginScreen
+          variant="modal"
+          onClose={() => setPendingAction(null)}
+        />
+      ) : null}
     </main>
   );
 }

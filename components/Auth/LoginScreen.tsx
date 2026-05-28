@@ -87,7 +87,12 @@ function validateFirebaseAuthConfig() {
   });
 }
 
-export function LoginScreen() {
+type LoginScreenProps = {
+  variant?: "page" | "modal";
+  onClose?: () => void;
+};
+
+export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
   const router = useRouter();
   const { user, isAuthLoading, setViewMode } = useApp();
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -260,9 +265,18 @@ export function LoginScreen() {
     }
   };
 
-  return (
-    <main className="login-shell">
-      <section className="login-card">
+  const content = (
+    <section className={`login-card ${variant === "modal" ? "login-modal-card" : ""}`}>
+      {variant === "modal" && onClose ? (
+        <button
+          aria-label="Close login"
+          className="login-modal-close"
+          onClick={onClose}
+          type="button"
+        >
+          X
+        </button>
+      ) : null}
         <Image
           alt="Memory Jar"
           className="login-logo-image"
@@ -291,6 +305,19 @@ export function LoginScreen() {
           {isJoiningInvite ? "Joining group..." : isSigningIn ? "Opening Google..." : "Continue with Google"}
         </button>
       </section>
+  );
+
+  if (variant === "modal") {
+    return (
+      <div className="login-modal-layer" role="dialog" aria-modal="true">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <main className="login-shell">
+      {content}
     </main>
   );
 }

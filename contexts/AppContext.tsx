@@ -15,7 +15,9 @@ import type { Group, ViewMode, AppPage, Memory } from "@/types/memory";
 
 // Pending action types for login redirects
 export type PendingAction =
+  | { type: "sign-in" }
   | { type: "add-memory" }
+  | { type: "create-group" }
   | { type: "edit-memories" }
   | { type: "view-groups" }
   | { type: "personal-info" }
@@ -133,7 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Request login with pending action
   const requestLogin = useCallback((action: PendingAction) => {
-    setPendingAction(action);
+    setPendingAction(action ?? { type: "sign-in" });
     // The LoginScreen will be shown by the app when user is null
     // After login, the pending action will be processed
   }, []);
@@ -151,10 +153,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case "personal-info":
           setCurrentPage("personal-info");
           break;
+        case "sign-in":
+        case "create-group":
+          break;
         // add-memory and join-group are handled elsewhere
       }
       // Clear the pending action after processing
-      if (pendingAction.type !== "add-memory" && pendingAction.type !== "join-group") {
+      if (
+        pendingAction.type !== "add-memory"
+        && pendingAction.type !== "join-group"
+        && pendingAction.type !== "create-group"
+      ) {
         setPendingAction(null);
       }
     }

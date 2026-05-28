@@ -10,9 +10,15 @@ interface ViewModeDropdownProps {
 }
 
 export function ViewModeDropdown({ onClose, onCreateGroup }: ViewModeDropdownProps) {
-  const { viewMode, setViewMode, groups, user } = useApp();
+  const { viewMode, setViewMode, groups, user, requestLogin } = useApp();
 
   const handleSelect = (mode: "all-memories" | "my-memories" | "everyone" | `group-${string}`) => {
+    if (!user && mode !== "everyone") {
+      requestLogin({ type: "sign-in" });
+      onClose();
+      return;
+    }
+
     setViewMode(mode);
     trackEvent("dropdown_changed", { selected_view: mode });
     if (mode === "all-memories") trackEvent("all_memories_selected");
@@ -33,6 +39,7 @@ export function ViewModeDropdown({ onClose, onCreateGroup }: ViewModeDropdownPro
       >
         <Images size={16} />
         <span>All Memories</span>
+        {!user ? <small className="login-required-label">Login</small> : null}
         {viewMode === "all-memories" && <Check size={14} className="check-icon" />}
       </button>
 
@@ -43,6 +50,7 @@ export function ViewModeDropdown({ onClose, onCreateGroup }: ViewModeDropdownPro
       >
         <Lock size={16} />
         <span>My Memories</span>
+        {!user ? <small className="login-required-label">Login</small> : null}
         {viewMode === "my-memories" && <Check size={14} className="check-icon" />}
       </button>
       
