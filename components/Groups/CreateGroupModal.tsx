@@ -145,11 +145,6 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
               </button>
             </div>
 
-            <div className="join-code-display">
-              <span className="join-code-label">Or share this code:</span>
-              <span className="join-code">{createdGroup.joinCode}</span>
-            </div>
-
             <div className="group-modal-actions">
               <button className="primary-button" onClick={handleDone} type="button">
                 Done
