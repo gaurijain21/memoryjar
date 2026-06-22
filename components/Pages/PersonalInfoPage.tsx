@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Mail, User } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -10,7 +9,6 @@ import { clearInviteCode } from "@/lib/inviteStorage";
 import { trackEvent } from "@/lib/analytics";
 
 export function PersonalInfoPage() {
-  const router = useRouter();
   const { user, setCurrentPage } = useApp();
 
   if (!user) return null;
@@ -22,7 +20,6 @@ export function PersonalInfoPage() {
           className="back-button" 
           onClick={() => {
             setCurrentPage("main");
-            router.replace("/");
           }} 
           type="button"
           aria-label="Back"

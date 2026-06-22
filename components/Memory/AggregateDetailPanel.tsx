@@ -1,11 +1,15 @@
 "use client";
 
-import { Calendar, ChevronLeft, ChevronRight, Lock, MapPin, X } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Lock, MapPin, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ExpandedMemoryModal } from "@/components/Memory/ExpandedMemoryModal";
+import { MemoryReactions } from "@/components/Memory/MemoryReactions";
+import { ShareMemoryButton } from "@/components/Memory/ShareMemoryButton";
+import { useApp } from "@/contexts/AppContext";
 import { formatMemoryDate } from "@/lib/formatDate";
+import { getMemoryExpandedHref } from "@/lib/expandedMemory";
 import { getReadableLocationName } from "@/lib/locationText";
 import type { AggregateMarker } from "@/types/memory";
+import Link from "next/link";
 
 type AggregateDetailPanelProps = {
   marker: AggregateMarker | null;
@@ -14,20 +18,27 @@ type AggregateDetailPanelProps = {
 };
 
 export function AggregateDetailPanel({ marker, onClose, onPublicPreviewAttempt }: AggregateDetailPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const { user, requestLogin } = useApp();
   const [previewIndex, setPreviewIndex] = useState(0);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [floatingEmoji, setFloatingEmoji] = useState<{ id: number; emoji: string } | null>(null);
 
   useEffect(() => {
     setPreviewIndex(0);
     setPhotoIndex(0);
-    setIsExpanded(false);
   }, [marker?.id]);
 
   useEffect(() => {
     setPhotoIndex(0);
-    setIsExpanded(false);
   }, [previewIndex]);
+
+  const floatEmoji = (emoji: string) => {
+    const id = Date.now();
+    setFloatingEmoji({ id, emoji });
+    window.setTimeout(() => {
+      setFloatingEmoji((current) => current?.id === id ? null : current);
+    }, 1400);
+  };
 
   if (!marker) return null;
   const previewItems = marker.previewItems?.length
@@ -122,37 +133,48 @@ export function AggregateDetailPanel({ marker, onClose, onPublicPreviewAttempt }
           </button>
         </div>
 
-        <div className="detail-photo">
-          {previewMemory.photoUrls[photoIndex] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt="" src={previewMemory.photoUrls[photoIndex]} />
-          ) : (
-            <MapPin size={40} />
-          )}
-        </div>
-        {carouselControls}
-        {previewMemory.photoUrls.length > 1 ? (
-          <div className="carousel-controls">
+        <div className="detail-photo-row">
+          {floatingEmoji ? (
+            <span className="floating-emoji detail-floating-emoji" key={floatingEmoji.id}>
+              {floatingEmoji.emoji}
+            </span>
+          ) : null}
+          {previewMemory.photoUrls.length > 1 ? (
             <button
               aria-label="Previous photo"
-              className="icon-button"
+              className="icon-button detail-carousel-arrow detail-carousel-arrow-left"
               onClick={() => setPhotoIndex((index) => (index === 0 ? previewMemory.photoUrls.length - 1 : index - 1))}
               type="button"
             >
               <ChevronLeft size={17} />
             </button>
+          ) : <span className="detail-carousel-spacer" />}
+
+          <div className="detail-photo">
+            {previewMemory.photoUrls[photoIndex] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img alt="" src={previewMemory.photoUrls[photoIndex]} />
+            ) : (
+              <MapPin size={40} />
+            )}
+            <ShareMemoryButton memory={previewMemory} />
+          </div>
+
+          {previewMemory.photoUrls.length > 1 ? (
             <button
               aria-label="Next photo"
-              className="icon-button"
+              className="icon-button detail-carousel-arrow detail-carousel-arrow-right"
               onClick={() => setPhotoIndex((index) => (index + 1) % previewMemory.photoUrls.length)}
               type="button"
             >
               <ChevronRight size={17} />
             </button>
-          </div>
-        ) : null}
+          ) : <span className="detail-carousel-spacer" />}
+        </div>
+        {carouselControls}
 
         <div className="detail-copy">
+          <h3>{previewMemory.title}</h3>
           {previewMemory.description ? <p>{previewMemory.description}</p> : null}
           <div className="detail-meta">
             {date ? (
@@ -168,15 +190,30 @@ export function AggregateDetailPanel({ marker, onClose, onPublicPreviewAttempt }
               </span>
             ) : null}
             <span>{visibilityLabel}</span>
+            {previewMemory.vibes?.length ? (
+              <span>
+                <Sparkles size={15} />
+                {previewMemory.vibes.slice(0, 3).join(", ")}
+              </span>
+            ) : null}
           </div>
-          <button className="expanded-view-button" onClick={() => setIsExpanded(true)} type="button">
+          <MemoryReactions
+            memory={previewMemory}
+            uid={user?.uid ?? null}
+            onReacted={floatEmoji}
+            onRequireLogin={() => requestLogin(null)}
+          />
+          <Link
+            className="expanded-view-button"
+            href={getMemoryExpandedHref(previewMemory)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open expanded view for ${previewMemory.title} in a new tab`}
+          >
             Expanded View
-          </button>
+          </Link>
         </div>
       </aside>
-      {isExpanded ? (
-        <ExpandedMemoryModal memory={previewMemory} visibilityLabel={visibilityLabel} onClose={() => setIsExpanded(false)} />
-      ) : null}
       </>
     );
   }

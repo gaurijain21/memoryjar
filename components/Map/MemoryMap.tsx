@@ -1,9 +1,10 @@
 "use client";
 
-import { type CSSProperties, useCallback, useMemo, useRef } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GoogleMap, Marker, OverlayView, useJsApiLoader } from "@react-google-maps/api";
 import { Compass, LocateFixed, Minus, Plus } from "lucide-react";
 import { getReadableLocationName } from "@/lib/locationText";
+import { getReactionKey, subscribeToReactionEvents } from "@/lib/reactions";
 import type { AggregateMarker, Memory, SelectedLocation, ViewMode } from "@/types/memory";
 
 const libraries: ("places")[] = ["places"];
@@ -59,6 +60,7 @@ type MemoryMapProps = {
   onSelectMemory: (memory: Memory) => void;
   onSelectAggregate: (marker: AggregateMarker) => void;
   onLocationSelected: (location: SelectedLocation) => void;
+  onMapInteraction?: () => void;
   onPinDropComplete: () => void;
 };
 
@@ -73,15 +75,81 @@ export function MemoryMap({
   onSelectMemory,
   onSelectAggregate,
   onLocationSelected,
+  onMapInteraction,
   onPinDropComplete,
 }: MemoryMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
+  const seenAggregateIdsRef = useRef<Set<string> | null>(null);
+  const reactionEventsInitializedRef = useRef(false);
+  const [burstAggregateId, setBurstAggregateId] = useState<string | null>(null);
+  const [reactionBursts, setReactionBursts] = useState<Array<{ id: string; emoji: string; lat: number; lng: number }>>([]);
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
     libraries,
   });
 
   const isEveryoneView = viewMode === "everyone";
+  const reactionTargets = useMemo(() => {
+    const targets = new Map<string, { lat: number; lng: number }>();
+    memories.forEach((memory) => {
+      targets.set(getReactionKey(memory), { lat: memory.lat, lng: memory.lng });
+    });
+    aggregateMarkers.forEach((marker) => {
+      marker.previewItems?.forEach((item) => {
+        if (item.memory) {
+          targets.set(getReactionKey(item.memory), { lat: marker.lat, lng: marker.lng });
+        }
+      });
+      if (marker.previewMemory) {
+        targets.set(getReactionKey(marker.previewMemory), { lat: marker.lat, lng: marker.lng });
+      }
+    });
+    return targets;
+  }, [aggregateMarkers, memories]);
+
+  useEffect(() => {
+    reactionEventsInitializedRef.current = false;
+    return subscribeToReactionEvents(
+      (events) => {
+        if (!reactionEventsInitializedRef.current) {
+          reactionEventsInitializedRef.current = true;
+          return;
+        }
+
+        events.forEach((event) => {
+          const target = reactionTargets.get(event.id);
+          if (!target || !event.emoji) return;
+          const id = `${event.id}-${event.reactionAt || Date.now()}`;
+          setReactionBursts((current) => [...current, { id, emoji: event.emoji, ...target }]);
+          window.setTimeout(() => {
+            setReactionBursts((current) => current.filter((burst) => burst.id !== id));
+          }, 4200);
+        });
+      },
+      (error) => console.warn("[MemoryJar reactions] map event listener failed", error),
+    );
+  }, [reactionTargets]);
+
+  useEffect(() => {
+    if (!isEveryoneView) {
+      seenAggregateIdsRef.current = null;
+      return;
+    }
+
+    const activeIds = new Set(aggregateMarkers.filter((marker) => marker.count > 0).map((marker) => marker.id));
+    if (!seenAggregateIdsRef.current) {
+      seenAggregateIdsRef.current = activeIds;
+      return;
+    }
+
+    const newMarker = aggregateMarkers.find((marker) => marker.count > 0 && !seenAggregateIdsRef.current?.has(marker.id));
+    seenAggregateIdsRef.current = activeIds;
+
+    if (!newMarker) return;
+    setBurstAggregateId(newMarker.id);
+    const timeoutId = window.setTimeout(() => setBurstAggregateId(null), 1100);
+    return () => window.clearTimeout(timeoutId);
+  }, [aggregateMarkers, isEveryoneView]);
   const draftPinIcon = useMemo(() => {
     if (!isLoaded || typeof window === "undefined" || !window.google) return undefined;
 
@@ -134,6 +202,7 @@ export function MemoryMap({
 
   const handleMapClick = useCallback(
     async (event: google.maps.MapMouseEvent) => {
+      onMapInteraction?.();
       if (!isPinDropMode || !event.latLng) return;
 
       const lat = event.latLng.lat();
@@ -164,7 +233,7 @@ export function MemoryMap({
       onLocationSelected(selected);
       onPinDropComplete();
     },
-    [isPinDropMode, onLocationSelected, onPinDropComplete],
+    [isPinDropMode, onLocationSelected, onMapInteraction, onPinDropComplete],
   );
 
   const showWorld = () => {
@@ -267,7 +336,7 @@ export function MemoryMap({
               style={{ "--pin-color": getMemoryPinColor(memory) } as CSSProperties}
             >
               <button
-                className={`memory-pin ${selectedMemory?.id === memory.id ? "active" : ""}`}
+                className={`memory-pin memory-pin-pulse ${selectedMemory?.id === memory.id ? "active" : ""}`}
                 onClick={() => focusMemory(memory)}
                 type="button"
               >
@@ -311,6 +380,7 @@ export function MemoryMap({
                       type="button"
                     >
                       <span className="aggregate-count">{marker.count}</span>
+                      {burstAggregateId === marker.id ? <span className="map-local-confetti" aria-hidden="true" /> : null}
                     </button>
                   </div>
                 </OverlayView>
@@ -332,6 +402,16 @@ export function MemoryMap({
             position={{ lat: draftLocation.lat, lng: draftLocation.lng }}
           />
         ) : null}
+        {reactionBursts.map((burst) => (
+          <OverlayView
+            getPixelPositionOffset={() => ({ x: 0, y: 0 })}
+            key={burst.id}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            position={{ lat: burst.lat, lng: burst.lng }}
+          >
+            <span className="map-reaction-float">{burst.emoji}</span>
+          </OverlayView>
+        ))}
       </GoogleMap>
     </div>
   );

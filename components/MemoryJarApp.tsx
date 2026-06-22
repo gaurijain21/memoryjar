@@ -5,7 +5,9 @@ import dynamic from "next/dynamic";
 import { LoginScreen } from "@/components/Auth/LoginScreen";
 import { AddMemoryModal } from "@/components/Memory/AddMemoryModal";
 import { AggregateDetailPanel } from "@/components/Memory/AggregateDetailPanel";
+import { MemoryConfetti } from "@/components/Memory/MemoryConfetti";
 import { MemoryDetailPanel } from "@/components/Memory/MemoryDetailPanel";
+import { PublicActivityNotifications } from "@/components/Memory/PublicActivityNotifications";
 import { MemoryTimeline } from "@/components/Timeline/MemoryTimeline";
 import { TopNavBar } from "@/components/Navigation/TopNavBar";
 import { ViewGroupsPage } from "@/components/Pages/ViewGroupsPage";
@@ -30,6 +32,7 @@ import {
   trackMemoryEdited,
   trackPhotoUploaded,
 } from "@/lib/analytics";
+import { sortMemoriesNewestFirst } from "@/lib/memorySort";
 import type { AggregateMarker, AggregatePreviewItem, Memory, MemoryDestination, MemoryInput, SelectedLocation } from "@/types/memory";
 
 const MemoryMap = dynamic(
@@ -46,7 +49,7 @@ function getAggregateKey(memory: Pick<Memory, "lat" | "lng" | "placeId">) {
 }
 
 function sortNewestFirst(memories: Memory[]) {
-  return [...memories].sort((a, b) => b.date.localeCompare(a.date));
+  return sortMemoriesNewestFirst(memories);
 }
 
 export function MemoryJarApp() {
@@ -81,6 +84,8 @@ export function MemoryJarApp() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPinDropMode, setIsPinDropMode] = useState(false);
   const [guestPublicPreviewCount, setGuestPublicPreviewCount] = useState(0);
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
+  const [timelineCollapseSignal, setTimelineCollapseSignal] = useState(0);
   const groupListenerKey = useMemo(
     () => groups
       .map((group) => group.id)
@@ -293,7 +298,7 @@ export function MemoryJarApp() {
         seen.add(stableKey);
         return true;
       })
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => sortMemoriesNewestFirst([a, b])[0] === a ? -1 : 1);
   }, [groupTimelineMemories, personalTimelineMemories, publicMemories]);
 
   // Subscribe to memories based on view mode
@@ -336,11 +341,13 @@ export function MemoryJarApp() {
           (personalMemories) => {
             memoryBuckets.set(
               "my-memories",
-              personalMemories.map((memory) => ({
-                ...memory,
-                id: `private-${memory.id}`,
-                groupId: null,
-              })),
+                personalMemories.map((memory) => ({
+                  ...memory,
+                  id: `private-${memory.id}`,
+                  sourceMemoryId: memory.id,
+                  ownerId: user.uid,
+                  groupId: null,
+                })),
             );
             updateCombinedMemories();
           },
@@ -358,6 +365,7 @@ export function MemoryJarApp() {
                 groupMemories.map((memory) => ({
                   ...memory,
                   id: `group-${groupId}-${memory.id}`,
+                  sourceMemoryId: memory.id,
                   groupId,
                   groupName: groupNameMap[groupId] ?? "Group memory",
                 })),
@@ -375,7 +383,11 @@ export function MemoryJarApp() {
     if (viewMode === "my-memories") {
       return subscribeToMemories(
         user.uid,
-        setMemories,
+        (personalMemories) => setMemories(personalMemories.map((memory) => ({
+          ...memory,
+          ownerId: user.uid,
+          sourceMemoryId: memory.id,
+        }))),
         handleSubscriptionError,
       );
     }
@@ -468,6 +480,9 @@ export function MemoryJarApp() {
   useEffect(() => {
     if (user && pendingAction) {
       if (pendingAction.type === "add-memory") {
+        if (pendingAction.groupId) {
+          setViewMode(`group-${pendingAction.groupId}`);
+        }
         trackEvent("add_memory_opened", { source_type: sourceType, selected_view: viewMode });
         setEditingMemory(null);
         setSelectedLocation(null);
@@ -476,7 +491,7 @@ export function MemoryJarApp() {
         setPendingAction(null);
       }
     }
-  }, [pendingAction, setPendingAction, sourceType, user, viewMode]);
+  }, [pendingAction, setPendingAction, setViewMode, sourceType, user, viewMode]);
 
   // Open edit modal only for explicit edit requests from management pages.
   useEffect(() => {
@@ -573,7 +588,8 @@ export function MemoryJarApp() {
         source_type: savedSourceType,
         group_id: savedGroupId,
       });
-      setSuccessMessage("Memory saved successfully!");
+      setSuccessMessage("Memory saved successfully");
+      window.dispatchEvent(new CustomEvent("memoryjar:confetti", { detail: { uid: user.uid } }));
       closeModal();
       setSelectedLocation(null);
       setIsPinDropMode(false);
@@ -722,7 +738,17 @@ export function MemoryJarApp() {
       <TopNavBar onAddMemory={openAddModal} canAddMemory={canAddMemory} />
 
       {error ? <div className="error-toast">{error}</div> : null}
-      {successMessage ? <div className="success-toast">{successMessage}</div> : null}
+      {successMessage ? (
+        <div className={`success-toast save-success-toast ${isTimelineExpanded ? "above-timeline" : ""}`}>
+          {successMessage}
+        </div>
+      ) : null}
+      <MemoryConfetti />
+      <PublicActivityNotifications
+        hidden={Boolean(selectedMemory || selectedAggregate || isModalOpen)}
+        memories={publicMemories}
+        timelineExpanded={isTimelineExpanded}
+      />
 
       <div className="map-container">
         <MemoryMap
@@ -733,6 +759,7 @@ export function MemoryJarApp() {
           selectedAggregate={selectedAggregate}
           viewMode={showEveryoneMode ? "everyone" : viewMode}
           onLocationSelected={setSelectedLocation}
+          onMapInteraction={() => setTimelineCollapseSignal((current) => current + 1)}
           onPinDropComplete={() => setIsPinDropMode(false)}
           onSelectAggregate={handleSelectAggregate}
           onSelectMemory={setSelectedMemory}
@@ -751,11 +778,15 @@ export function MemoryJarApp() {
         onPublicPreviewAttempt={handlePublicPreviewAttempt}
       />
 
-      <MemoryTimeline
-        memories={timelineMemories}
-        onSelectMemory={handleSelectTimelineMemory}
-        selectedMemoryId={selectedMemory?.id}
-      />
+      {user ? (
+        <MemoryTimeline
+          collapseSignal={timelineCollapseSignal}
+          memories={timelineMemories}
+          onExpandedChange={setIsTimelineExpanded}
+          onSelectMemory={handleSelectTimelineMemory}
+          selectedMemoryId={selectedMemory?.id}
+        />
+      ) : null}
 
       <AddMemoryModal
         editingMemory={editingMemory}

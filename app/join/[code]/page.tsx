@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, use } from "react";
+import { useEffect, useState, use } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { Users, Loader2 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { getGroupByJoinCode, joinGroupByCode } from "@/lib/groups";
-import { clearInviteCode, getStoredInviteCode, saveInviteCode } from "@/lib/inviteStorage";
+import { clearInviteCode, saveInviteCode } from "@/lib/inviteStorage";
 import { trackEvent, trackGroupJoined } from "@/lib/analytics";
+import type { Group } from "@/types/memory";
 
 interface JoinPageProps {
   params: Promise<{ code: string }>;
@@ -19,11 +20,9 @@ export default function JoinPage({ params }: JoinPageProps) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [groupName, setGroupName] = useState<string | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [canRedirectToLogin, setCanRedirectToLogin] = useState(false);
-  const joinAttemptedRef = useRef(false);
 
   // Check auth state
   useEffect(() => {
@@ -36,7 +35,6 @@ export default function JoinPage({ params }: JoinPageProps) {
       });
       setUser(currentUser);
       setAuthReady(true);
-      window.setTimeout(() => setCanRedirectToLogin(true), 900);
     });
   }, [code]);
 
@@ -53,56 +51,48 @@ export default function JoinPage({ params }: JoinPageProps) {
     }
   }, [code]);
 
-  // Once Firebase has finished initializing, send logged-out users to login.
-  // Do not call Google sign-in from this page; the login button owns that action.
   useEffect(() => {
-    if (!authReady || !canRedirectToLogin || user || error) return;
-    console.info("[MemoryJar invite] no current user after auth load, redirecting to login", {
-      code,
-      redirectDestination: `/login?inviteCode=${code}`,
-    });
-    router.replace(`/login?inviteCode=${encodeURIComponent(code)}`);
-  }, [authReady, canRedirectToLogin, code, error, router, user]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!authReady || !user || joinAttemptedRef.current) return;
+    async function loadInvite() {
+      try {
+        const fetchedGroup = await getGroupByJoinCode(code);
+        if (cancelled) return;
+        if (!fetchedGroup) {
+          setError("This invite link is invalid or has expired.");
+          return;
+        }
+        setGroup(fetchedGroup);
+      } catch (inviteError) {
+        if (!cancelled) {
+          setError(inviteError instanceof Error ? inviteError.message : "Could not load this invite.");
+        }
+      }
+    }
 
-    const currentUser = user;
-    const inviteCode = getStoredInviteCode() || code;
-    if (!inviteCode) {
-      console.error("[MemoryJar invite] pending invite code missing on join route");
-      setError("This invite link is invalid or has expired.");
+    void loadInvite();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  const handleAcceptInvite = async () => {
+    if (!user) {
+      saveInviteCode(code);
+      router.push(`/login?inviteCode=${encodeURIComponent(code)}`);
       return;
     }
 
-    let cancelled = false;
-
-    async function acceptInvite() {
-      joinAttemptedRef.current = true;
+    const currentUser = user;
       setIsJoining(true);
       setError(null);
       console.info("[MemoryJar invite] direct join started", {
-        inviteCode,
+      inviteCode: code,
         uid: currentUser.uid,
       });
 
       try {
-        const group = await getGroupByJoinCode(inviteCode);
-        console.info("[MemoryJar invite] group lookup finished", {
-          inviteCode,
-          groupFound: Boolean(group),
-          groupId: group?.id ?? null,
-        });
-        if (!group) {
-          if (!cancelled) {
-            setError("This invite link is invalid or has expired.");
-            setIsJoining(false);
-          }
-          return;
-        }
-
-        if (!cancelled) setGroupName(group.name);
-
         const result = await joinGroupByCode(
           currentUser.uid,
           {
@@ -110,21 +100,19 @@ export default function JoinPage({ params }: JoinPageProps) {
             email: currentUser.email,
             photoURL: currentUser.photoURL,
           },
-          inviteCode
+        code,
         );
-
-        if (cancelled) return;
 
         if (result.success && result.groupId) {
           console.info("[MemoryJar invite] direct join success", {
             groupId: result.groupId,
             alreadyMember: Boolean(result.alreadyMember),
-            redirectDestination: "/",
+            redirectDestination: "/app",
           });
           trackGroupJoined(result.groupId, result.alreadyMember);
           sessionStorage.setItem("joinedGroupId", result.groupId);
           clearInviteCode();
-          router.replace("/");
+          router.replace("/app");
           return;
         }
 
@@ -132,29 +120,20 @@ export default function JoinPage({ params }: JoinPageProps) {
         setError(result.error ?? "Failed to join group");
         setIsJoining(false);
       } catch (err) {
-        if (!cancelled) {
           console.error("[MemoryJar invite] direct join threw", err);
           setError(err instanceof Error ? err.message : "Failed to join group");
           setIsJoining(false);
-        }
       }
-    }
-
-    acceptInvite();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authReady, code, router, user]);
+  };
 
   // Loading state
-  if (!authReady || (groupName && user && isJoining)) {
+  if (!authReady || (!group && !error)) {
     return (
       <main className="join-page">
         <div className="join-card">
           <div className="join-loading">
             <Loader2 size={32} className="spinning" />
-            <span>{isJoining ? "Joining group..." : "Loading..."}</span>
+            <span>Loading invite...</span>
           </div>
         </div>
       </main>
@@ -162,7 +141,7 @@ export default function JoinPage({ params }: JoinPageProps) {
   }
 
   // Error state
-  if (error && !groupName) {
+  if (error && !group) {
     return (
       <main className="join-page">
         <div className="join-card">
@@ -173,7 +152,7 @@ export default function JoinPage({ params }: JoinPageProps) {
             <h1>Memory Jar</h1>
           </div>
           <div className="join-error">{error}</div>
-          <button className="primary-button" onClick={() => router.push("/")} type="button">
+          <button className="primary-button" onClick={() => router.push("/app")} type="button">
             Go to Memory Jar
           </button>
         </div>
@@ -181,38 +160,11 @@ export default function JoinPage({ params }: JoinPageProps) {
     );
   }
 
-  // Not logged in - login redirect is in progress.
-  if (!user) {
-    return (
-      <main className="join-page">
-        <div className="join-card">
-          <div className="join-brand">
-            <div className="join-brand-icon">
-              <Image alt="" height={36} src="/logomap.jpg" width={36} />
-            </div>
-            <h1>Memory Jar</h1>
-          </div>
+  if (!group) return null;
 
-          <div className="join-invite">
-            <div className="join-invite-icon">
-              <Users size={24} />
-            </div>
-            <h2>You&apos;re invited!</h2>
-            <p>Sign in with Google to accept this Memory Jar group invite.</p>
-          </div>
+  const admin = group.members?.[group.ownerId];
+  const adminName = admin?.displayName || admin?.email || "The group admin";
 
-          {error && <div className="join-error">{error}</div>}
-
-          <div className="join-loading">
-            <Loader2 size={24} className="spinning" />
-            <span>Opening sign in...</span>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // Logged in but not yet joining (edge case - should auto-join)
   return (
     <main className="join-page">
       <div className="join-card">
@@ -227,19 +179,22 @@ export default function JoinPage({ params }: JoinPageProps) {
           <div className="join-invite-icon">
             <Users size={24} />
           </div>
-          <h2>Join Group</h2>
-          {groupName && <p>Join <strong>{groupName}</strong></p>}
+          <h2>{adminName} invited you to join {group.name}.</h2>
+          <p>If you know this person and want to join, accept the invite and sign in with Google.</p>
         </div>
 
         {error && <div className="join-error">{error}</div>}
 
         <button
           className="primary-button"
-          onClick={() => window.location.reload()}
+          onClick={() => void handleAcceptInvite()}
           disabled={isJoining}
           type="button"
         >
-          {isJoining ? "Joining..." : "Join Group"}
+          {isJoining ? "Joining..." : user ? "Accept invite" : "Sign in with Google to Join"}
+        </button>
+        <button className="popup-test-button" onClick={() => router.push("/")} type="button">
+          Not now
         </button>
       </div>
     </main>

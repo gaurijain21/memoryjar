@@ -24,6 +24,7 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
     pendingAction,
     setPendingAction,
     setCurrentPage,
+    setViewMode,
     requestLogin,
     currentGroup,
   } = useApp();
@@ -68,6 +69,10 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
       return;
     }
 
+    if (action === "edit-memories") {
+      setViewMode("my-memories");
+    }
+
     setCurrentPage(action);
   };
 
@@ -103,18 +108,8 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
           <span className="nav-brand-text">Memory Jar</span>
         </div>
 
-        {/* Center: Add Memory + View Dropdown */}
+        {/* Center: View Dropdown */}
         <div className="nav-center">
-          <button
-            className="add-memory-button"
-            onClick={handleAddMemory}
-            disabled={!canAddMemory}
-            type="button"
-          >
-            <Plus size={18} />
-            <span>Add Memory</span>
-          </button>
-
           <div className="view-dropdown-container" ref={viewDropdownRef}>
             <button
               className="view-dropdown-trigger"
@@ -145,6 +140,16 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
 
         {/* Right: Profile */}
         <div className="nav-profile" ref={profileMenuRef}>
+          <button
+            className="add-memory-button"
+            onClick={handleAddMemory}
+            disabled={!canAddMemory}
+            type="button"
+          >
+            <Plus size={18} />
+            <span>Add Memory</span>
+          </button>
+
           {user ? (
             <button
               className="profile-avatar-button"

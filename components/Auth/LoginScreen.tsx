@@ -169,14 +169,14 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
         console.info("[MemoryJar invite] joining group success", {
           groupId: result.groupId,
           alreadyMember: Boolean(result.alreadyMember),
-          redirectDestination: "/",
+          redirectDestination: "/app",
         });
         trackGroupJoined(result.groupId, result.alreadyMember);
         sessionStorage.setItem("joinedGroupId", result.groupId);
         setViewMode(`group-${result.groupId}`);
         clearInviteCode();
-        console.info("[MemoryJar invite] redirecting to home");
-        router.replace("/");
+        console.info("[MemoryJar invite] redirecting to app");
+        router.replace("/app");
       } catch (joinError) {
         if (!cancelled) {
           console.error("[MemoryJar invite] joining group threw", joinError);
@@ -195,8 +195,8 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
 
   useEffect(() => {
     if (isAuthLoading || !user || inviteCode || window.location.pathname !== "/login") return;
-    console.info("[MemoryJar invite] current user exists without invite, redirecting home");
-    router.replace("/");
+    console.info("[MemoryJar invite] current user exists without invite, redirecting app");
+    router.replace("/app");
   }, [inviteCode, isAuthLoading, router, user]);
 
   const handleGoogleSignIn = async () => {
@@ -224,7 +224,7 @@ export function LoginScreen({ variant = "page", onClose }: LoginScreenProps) {
       trackLogin("google_popup");
 
       if (!inviteCode && window.location.pathname === "/login") {
-        router.replace("/");
+        router.replace("/app");
       }
     } catch (signInError) {
       const firebaseError = signInError as { code?: string; message?: string };

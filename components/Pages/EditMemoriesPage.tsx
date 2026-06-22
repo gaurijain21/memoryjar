@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Calendar, MapPin, Trash2, Edit3, ImageIcon } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { formatMemoryDate } from "@/lib/formatDate";
@@ -12,7 +11,6 @@ import { trackEvent, trackMemoryDeleted } from "@/lib/analytics";
 import type { Memory } from "@/types/memory";
 
 export function EditMemoriesPage() {
-  const router = useRouter();
   const { user, isAuthLoading, viewMode, currentGroup, setCurrentPage, setMemoryToEdit } = useApp();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,9 +91,13 @@ export function EditMemoriesPage() {
   };
 
   const handleBack = () => {
+    const previousPage = sessionStorage.getItem("memoryJarPreviousPage");
     sessionStorage.removeItem("memoryJarPreviousPage");
+    if (previousPage === "view-groups") {
+      setCurrentPage("view-groups");
+      return;
+    }
     setCurrentPage("main");
-    router.replace("/");
   };
 
   const pageTitle = isGroupView && currentGroup 

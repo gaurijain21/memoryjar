@@ -69,5 +69,39 @@ service cloud.firestore {
         && request.resource.data.audience == "public";
       allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
     }
+
+    match /memoryReactions/{reactionId} {
+      function canReadReaction() {
+        return resource.data.visibility == "public"
+          || (signedIn() && resource.data.ownerId == request.auth.uid)
+          || (signedIn() && resource.data.groupId is string && isGroupMember(resource.data.groupId));
+      }
+
+      function canWriteReaction() {
+        return request.resource.data.visibility == "public"
+          || (signedIn() && request.resource.data.ownerId == request.auth.uid)
+          || (signedIn() && request.resource.data.groupId is string && isGroupMember(request.resource.data.groupId));
+      }
+
+      allow read: if true;
+      allow create, update: if signedIn() && canWriteReaction();
+
+      match /emojiUsers/{reactionUserId} {
+        function parentData() {
+          return get(/databases/$(database)/documents/memoryReactions/$(reactionId)).data;
+        }
+
+        function canAccessParent() {
+          return parentData().visibility == "public"
+            || parentData().ownerId == request.auth.uid
+            || (parentData().groupId is string && isGroupMember(parentData().groupId));
+        }
+
+        allow read: if signedIn() && canAccessParent();
+        allow create, delete: if signedIn()
+          && reactionUserId.matches(".*_" + request.auth.uid)
+          && canAccessParent();
+      }
+    }
   }
 }

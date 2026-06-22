@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Users, Crown, Trash2, LogOut, Check, Link2 } from "lucide-react";
+import { ArrowLeft, Users, Crown, Trash2, LogOut, Check, Link2, Plus } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
 import { deleteGroup, leaveGroup, removeMember } from "@/lib/groups";
@@ -10,8 +9,7 @@ import { trackButtonClick, trackEvent } from "@/lib/analytics";
 import type { Group } from "@/types/memory";
 
 export function ViewGroupsPage() {
-  const router = useRouter();
-  const { user, groups, setCurrentPage, setViewMode } = useApp();
+  const { user, groups, setCurrentPage, setPendingAction, setViewMode } = useApp();
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState<string | null>(null);
@@ -48,6 +46,13 @@ export function ViewGroupsPage() {
       setCopiedGroupId(group.id);
       setTimeout(() => setCopiedGroupId(null), 2000);
     }
+  };
+
+  const handleAddGroupMemory = (group: Group) => {
+    trackButtonClick("add_group_memory", "view_groups", { group_id: group.id });
+    setViewMode(`group-${group.id}`);
+    setCurrentPage("main");
+    setPendingAction({ type: "add-memory", groupId: group.id });
   };
 
   const handleLeave = async (group: Group) => {
@@ -128,7 +133,6 @@ export function ViewGroupsPage() {
           className="back-button" 
           onClick={() => {
             setCurrentPage("main");
-            router.replace("/");
           }} 
           type="button"
           aria-label="Back"
@@ -216,6 +220,14 @@ export function ViewGroupsPage() {
                             Copy Invite Link
                           </>
                         )}
+                      </button>
+                      <button
+                        className="group-action-button"
+                        onClick={() => handleAddGroupMemory(group)}
+                        type="button"
+                      >
+                        <Plus size={14} />
+                        Add Memory
                       </button>
                     </div>
 

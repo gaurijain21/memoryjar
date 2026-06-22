@@ -20,6 +20,8 @@ export type Memory = {
   groupId?: string | null;
   groupName?: string | null;
   audience?: "private" | "public";
+  vibes?: string[];
+  feeling?: string | null;
   ownerId?: string;
   sourceMemoryId?: string;
   createdAt?: Timestamp;

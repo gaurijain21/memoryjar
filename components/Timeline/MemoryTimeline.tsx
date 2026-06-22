@@ -1,12 +1,15 @@
 "use client";
 
 import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { sortMemoriesNewestFirst } from "@/lib/memorySort";
 import type { Memory } from "@/types/memory";
 
 type MemoryTimelineProps = {
+  collapseSignal?: number;
   memories: Memory[];
   selectedMemoryId?: string;
+  onExpandedChange?: (isExpanded: boolean) => void;
   onSelectMemory: (memory: Memory) => void;
 };
 
@@ -28,16 +31,25 @@ function getMonthLabel(monthKey: string) {
 }
 
 export function MemoryTimeline({
+  collapseSignal = 0,
   memories,
+  onExpandedChange,
   selectedMemoryId,
   onSelectMemory,
 }: MemoryTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  useEffect(() => {
+    onExpandedChange?.(isExpanded);
+  }, [isExpanded, onExpandedChange]);
+
+  useEffect(() => {
+    if (collapseSignal > 0) setIsExpanded(false);
+  }, [collapseSignal]);
+
   const monthGroups = useMemo(() => {
     const grouped = new Map<string, TimelineImage[]>();
 
-    [...memories]
-      .sort((a, b) => a.date.localeCompare(b.date))
+    sortMemoriesNewestFirst(memories)
       .forEach((memory) => {
         const monthKey = getMonthKey(memory.date);
         const photos = memory.photoUrls.length > 0 ? memory.photoUrls : [null];
@@ -74,12 +86,12 @@ export function MemoryTimeline({
         onClick={() => setIsExpanded((current) => !current)}
         type="button"
       >
-        <span>Timeline</span>
+        <span>Your Timeline</span>
         {isExpanded ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
       </button>
       <div className="timeline-header">
         <div>
-          <h2>Timeline</h2>
+          <h2>Your Timeline</h2>
         </div>
       </div>
       <div className="timeline-month-strip">

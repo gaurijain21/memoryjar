@@ -1,7 +1,33 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ImagePlus, Info, MapPin, MousePointer2, Trash2, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Baby,
+  BookOpen,
+  Camera,
+  Check,
+  Coffee,
+  Heart,
+  ImagePlus,
+  Laptop,
+  Leaf,
+  MapPin,
+  Music,
+  Palette,
+  PartyPopper,
+  Plane,
+  Plus,
+  Smile,
+  Sparkles,
+  Sprout,
+  Star,
+  Trophy,
+  Trash2,
+  Users,
+  Utensils,
+  X,
+  Zap,
+} from "lucide-react";
 import { PlaceSearch } from "@/components/Map/PlaceSearch";
 import type { Group, Memory, MemoryAudience, MemoryDestination, MemoryInput, SelectedLocation } from "@/types/memory";
 
@@ -24,50 +50,100 @@ type AddMemoryModalProps = {
   ) => Promise<void>;
 };
 
+type VisibilityChoice = "just-me" | "group" | "everyone";
+
+const defaultVibes = [
+  { label: "Travel", icon: Plane },
+  { label: "Adventure", icon: Sprout },
+  { label: "Learning", icon: BookOpen },
+  { label: "Achievement", icon: Trophy },
+  { label: "Friends", icon: Users },
+  { label: "Family", icon: Baby },
+  { label: "Self Care", icon: Heart },
+  { label: "Food", icon: Utensils },
+  { label: "Nature", icon: Leaf },
+  { label: "Creativity", icon: Palette },
+  { label: "Music", icon: Music },
+  { label: "Work", icon: Laptop },
+  { label: "Love", icon: Heart },
+  { label: "Fun", icon: PartyPopper },
+  { label: "Chill", icon: Coffee },
+  { label: "Reflection", icon: Star },
+];
+
+const defaultFeelings = ["Happy", "Grateful", "Peaceful", "Excited", "Nostalgic", "Proud"];
+
+function toDateInputValue(date: string | undefined) {
+  if (!date) return "";
+  const [year, month, day] = date.split("-");
+  if (!year || !month) return "";
+  return `${year}-${month.padStart(2, "0")}-${(day || "01").padStart(2, "0")}`;
+}
+
+function isVideoFile(file: File) {
+  return file.type.startsWith("video/");
+}
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|mov|m4v|webm|ogg)(\?|$)/i.test(url);
+}
+
 export function AddMemoryModal({
   isOpen,
   isSaving,
   editingMemory,
   selectedLocation,
-  pinDropMode,
   groups,
   defaultDestination,
   onLocationSelected,
-  onRequestPinDrop,
   onClose,
   onSubmit,
 }: AddMemoryModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [month, setMonth] = useState("");
-  const [year, setYear] = useState("");
+  const [date, setDate] = useState("");
   const [locationName, setLocationName] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoUrlsToKeep, setPhotoUrlsToKeep] = useState<string[]>([]);
-  const [destination, setDestination] = useState<MemoryDestination>("my-memories");
-  const [audience, setAudience] = useState<MemoryAudience>("private");
-  const [showAudienceInfo, setShowAudienceInfo] = useState(false);
+  const [visibility, setVisibility] = useState<VisibilityChoice>("just-me");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
+  const [customVibe, setCustomVibe] = useState("");
+  const [feeling, setFeeling] = useState("");
+  const [customFeeling, setCustomFeeling] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
-    const editingDestination = editingMemory?.groupId
-      ? (`group-${editingMemory.groupId}` as MemoryDestination)
-      : "my-memories";
+
+    const editingGroupId = editingMemory?.groupId ?? "";
+    const nextVisibility: VisibilityChoice = editingGroupId
+      ? "group"
+      : editingMemory?.audience === "public"
+        ? "everyone"
+        : defaultDestination.startsWith("group-")
+          ? "group"
+          : "just-me";
+    const defaultGroupId = defaultDestination.startsWith("group-")
+      ? defaultDestination.replace("group-", "")
+      : "";
 
     setTitle(editingMemory?.title ?? "");
     setDescription(editingMemory?.description ?? "");
-    const [savedYear = "", savedMonth = ""] = (editingMemory?.date ?? "").split("-");
-    setYear(savedYear || new Date().getFullYear().toString());
-    setMonth(savedMonth);
+    setDate(toDateInputValue(editingMemory?.date));
     setLocationName(editingMemory?.locationName ?? "");
     setPhotos([]);
     setPhotoUrlsToKeep(editingMemory?.photoUrls ?? []);
-    setDestination(editingMemory ? editingDestination : defaultDestination);
-    setAudience(editingMemory?.audience ?? "private");
-    setShowAudienceInfo(false);
+    setVisibility(nextVisibility);
+    setSelectedGroupId(editingGroupId || defaultGroupId || groups[0]?.id || "");
+    setSelectedVibes(editingMemory?.vibes ?? []);
+    setCustomVibe("");
+    setFeeling(editingMemory?.feeling ?? "");
+    setCustomFeeling("");
+    setTermsAccepted(false);
     setValidationError("");
-  }, [defaultDestination, editingMemory, isOpen]);
+  }, [defaultDestination, editingMemory, groups, isOpen]);
 
   useEffect(() => {
     if (selectedLocation?.locationName) {
@@ -76,66 +152,83 @@ export function AddMemoryModal({
   }, [selectedLocation]);
 
   const previewUrls = useMemo(
-    () => photos.map((photo) => URL.createObjectURL(photo)),
+    () => photos.map((photo) => ({ file: photo, url: URL.createObjectURL(photo) })),
     [photos],
   );
 
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [previewUrls]);
+
   if (!isOpen) return null;
+
+  const selectedFileCount = photos.length + photoUrlsToKeep.length;
+  const remainingFileSlots = Math.max(10 - selectedFileCount, 0);
+  const isGroupVisibility = visibility === "group";
+  const destination: MemoryDestination = isGroupVisibility && selectedGroupId
+    ? (`group-${selectedGroupId}` as MemoryDestination)
+    : "my-memories";
+  const audience: MemoryAudience = visibility === "everyone" ? "public" : "private";
+  const canSubmit = termsAccepted && !isSaving;
+
+  const toggleVibe = (vibe: string) => {
+    setSelectedVibes((current) =>
+      current.includes(vibe)
+        ? current.filter((item) => item !== vibe)
+        : [...current, vibe],
+    );
+  };
+
+  const addCustomVibe = () => {
+    const next = customVibe.trim();
+    if (!next) return;
+    setSelectedVibes((current) => current.includes(next) ? current : [...current, next]);
+    setCustomVibe("");
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const hasLocation = Boolean(selectedLocation || editingMemory);
-    const hasImage = photos.length > 0 || photoUrlsToKeep.length > 0;
-    const hasDate = Boolean(month.trim() && year.trim());
-    const hasDestination = Boolean(destination);
-    const hasVisibility = destination !== "my-memories" || Boolean(audience);
+    const location = selectedLocation ?? editingMemory;
 
-    if (!hasLocation) {
-      setValidationError("Choose a location before saving.");
-      return;
-    }
-
-    if (!hasDestination) {
-      setValidationError("Choose where to add this memory.");
+    if (!location) {
+      setValidationError("Search and select a location first.");
       return;
     }
 
     if (!title.trim()) {
-      setValidationError("Add a title before saving.");
+      setValidationError("Give this memory a title.");
       return;
     }
 
-    if (!hasDate) {
-      setValidationError("Add a month and year before saving.");
+    if (!date) {
+      setValidationError("Pick the date this happened.");
       return;
     }
 
-    if (!hasVisibility) {
-      setValidationError("Choose Private or Public before saving.");
+    if (visibility === "group" && !selectedGroupId) {
+      setValidationError("Choose a group or switch visibility.");
       return;
     }
 
-    if (!hasImage) {
-      setValidationError("Add at least one image before saving.");
+    if (!termsAccepted) {
+      setValidationError("Accept the Terms & Conditions to save.");
       return;
     }
 
-    const location = selectedLocation ?? editingMemory;
-    if (!location) return;
-
-    const normalizedDate = month ? `${year}-${month}` : year;
     setValidationError("");
 
     await onSubmit(
       {
         title: title.trim(),
         description: description.trim(),
-        date: normalizedDate,
+        date,
         locationName: locationName || location.locationName,
         lat: location.lat,
         lng: location.lng,
         formattedAddress: location.formattedAddress ?? editingMemory?.formattedAddress ?? null,
-        locationSource: location.locationSource ?? editingMemory?.locationSource ?? "pin",
+        locationSource: location.locationSource ?? editingMemory?.locationSource ?? "search",
         placeId: location.placeId ?? editingMemory?.placeId ?? null,
         placeName: location.placeName ?? editingMemory?.placeName ?? null,
         placePhotoReference: location.placePhotoReference ?? editingMemory?.placePhotoReference ?? null,
@@ -143,6 +236,8 @@ export function AddMemoryModal({
         storagePaths: editingMemory?.storagePaths ?? [],
         audience: destination === "my-memories" ? audience : "private",
         groupId: destination.startsWith("group-") ? destination.replace("group-", "") : null,
+        vibes: selectedVibes,
+        feeling: (customFeeling.trim() || feeling || null),
       },
       photos,
       photoUrlsToKeep,
@@ -155,199 +250,289 @@ export function AddMemoryModal({
 
   return (
     <div className="drawer-layer">
-      <form className={`memory-modal ${pinDropMode ? "pin-mode" : ""}`} noValidate onSubmit={handleSubmit}>
+      <form className="memory-modal social-memory-modal" noValidate onSubmit={handleSubmit}>
         <div className="modal-title-row">
           <div>
-            <p className="eyebrow">{editingMemory ? "Edit memory" : "Capture life, drop a pin!"}</p>
-            <h2>{editingMemory ? editingMemory.title : "ADD MEMORY"}</h2>
+            <p className="eyebrow">{editingMemory ? "Edit memory" : "Post a memory"}</p>
+            <h2>{editingMemory ? editingMemory.title : "Add a Memory ✨"}</h2>
           </div>
           <button aria-label="Close" className="icon-button" onClick={onClose} type="button">
             <X size={18} />
           </button>
         </div>
 
-        <div className="drawer-location-tools">
-          <span className="section-label">Location</span>
+        <section className="memory-form-section">
+          <SectionHeader icon={<MapPin size={16} />} title="Add a location" />
           <PlaceSearch
             className="drawer-place-search"
             onPlaceSelected={(location) => {
               onLocationSelected(location);
               setLocationName(location.locationName);
             }}
-            placeholder="Search location"
+            placeholder="Search a place, city, cafe..."
           />
-          <button
-            className={`drop-pin-button ${pinDropMode ? "active" : ""}`}
-            onClick={onRequestPinDrop}
-            type="button"
-          >
-            <MousePointer2 size={16} />
-            {pinDropMode ? "Click on the map" : "Drop pin on map"}
-          </button>
-          <p className="drop-pin-mobile-note">Drop pin is available on desktop. Use search on mobile.</p>
-        </div>
-
-        {(selectedLocation || editingMemory) && locationName ? (
-          <div className="location-chip">
-            <MapPin size={16} />
-            <span>{locationName}</span>
-          </div>
-        ) : null}
-
-        <label>
-          <span>Add to</span>
-          <select
-            className="memory-select"
-            disabled={Boolean(editingMemory)}
-            onChange={(event) => setDestination(event.target.value as MemoryDestination)}
-            required
-            value={destination}
-          >
-            <option value="my-memories">My Memories</option>
-            {groups.map((group) => (
-              <option key={group.id} value={`group-${group.id}`}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {destination === "my-memories" ? (
-          <div className="audience-field">
-            <span className="section-label">Visibility</span>
-            <div className="audience-toggle-row">
-              <span>Private</span>
-              <button
-                aria-label="Toggle memory visibility"
-                aria-pressed={audience === "public"}
-                className={`audience-switch ${audience === "public" ? "public" : "private"}`}
-                onClick={() => setAudience((current) => current === "private" ? "public" : "private")}
-                type="button"
-              >
-                <span />
-              </button>
-              <span>Public</span>
-              <button
-                className="audience-info"
-                aria-label="Show visibility info"
-                onClick={() => setShowAudienceInfo((current) => !current)}
-                type="button"
-              >
-                <Info size={14} />
-              </button>
-            </div>
-            {showAudienceInfo ? (
-              <div className="audience-inline-info">
-                <p>Private: only you can see this memory.</p>
-                <p>Public: visible in Everyone&apos;s Memories.</p>
+          {(selectedLocation || editingMemory) && locationName ? (
+            <div className="selected-place-card">
+              <MapPin size={17} />
+              <div>
+                <strong>{locationName}</strong>
+                <span>{selectedLocation?.formattedAddress ?? editingMemory?.formattedAddress ?? "Selected location"}</span>
               </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="audience-note">
-            This memory will be visible only to members of the selected group.
-          </p>
-        )}
+              <Check size={17} />
+            </div>
+          ) : null}
+        </section>
 
-        <label>
-          <span>Title</span>
-          <input
-            maxLength={50}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Late night beach drive"
-            required
-            value={title}
-          />
-        </label>
-
-        <label>
-          <span>Description</span>
-          <textarea
-            maxLength={150}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="We stayed here until midnight talking about life and eating fries."
-            rows={2}
-            value={description}
-          />
-        </label>
-
-        <div className="form-grid">
+        <section className="memory-form-section">
+          <SectionHeader icon={<Sparkles size={16} />} title="What’s this memory?" />
           <label>
-            <span>Month</span>
-          <input
-              max="12"
-              min="01"
-              onBlur={() => setMonth((current) => current ? current.padStart(2, "0") : "")}
-              onChange={(event) => setMonth(event.target.value.slice(0, 2))}
-              placeholder="06"
-              required
-              type="number"
-              value={month}
-            />
-          </label>
-          <label>
-            <span>Year</span>
+            <span>Title</span>
             <input
-              max="9999"
-              min="1"
-              onChange={(event) => setYear(event.target.value)}
-              placeholder="2026"
+              maxLength={70}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Give this memory a title…"
               required
-              type="number"
-              value={year}
+              value={title}
             />
           </label>
-        </div>
+          <label>
+            <span>Description</span>
+            <textarea
+              maxLength={500}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Tell the story behind this moment…"
+              rows={4}
+              value={description}
+            />
+          </label>
+        </section>
 
-        <label className="photo-picker">
-          <ImagePlus size={18} />
-          <span>Add photos</span>
-          <input
-            accept="image/*"
-            multiple
-            onChange={(event) => {
-              const files = Array.from(event.target.files ?? []);
-              const remainingSlots = Math.max(10 - photoUrlsToKeep.length, 0);
-              setPhotos(files.slice(0, remainingSlots));
-            }}
-            type="file"
-          />
-        </label>
+        <section className="memory-form-section">
+          <SectionHeader icon={<Camera size={16} />} title="When did this happen?" />
+          <label>
+            <span>Date</span>
+            <input
+              onChange={(event) => setDate(event.target.value)}
+              required
+              type="date"
+              value={date}
+            />
+          </label>
+        </section>
 
-        <div className="photo-preview-grid">
-          {photoUrlsToKeep.map((url) => (
-            <div className="photo-preview" key={url}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="" src={url} />
+        <section className="memory-form-section">
+          <SectionHeader icon={<Zap size={16} />} title="What vibe does this memory give?" />
+          <div className="vibe-grid">
+            {defaultVibes.map(({ label, icon: Icon }) => (
               <button
-                aria-label="Remove photo"
-                onClick={() =>
-                  setPhotoUrlsToKeep((current) => current.filter((item) => item !== url))
-                }
+                className={`vibe-card ${selectedVibes.includes(label) ? "active" : ""}`}
+                key={label}
+                onClick={() => toggleVibe(label)}
                 type="button"
               >
-                <Trash2 size={14} />
+                <Icon size={20} />
+                <span>{label}</span>
               </button>
-            </div>
-          ))}
-          {previewUrls.map((url) => (
-            <div className="photo-preview" key={url}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="" src={url} />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <div className="custom-chip-row">
+            <input
+              onChange={(event) => setCustomVibe(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addCustomVibe();
+                }
+              }}
+              placeholder="Add your own vibe"
+              value={customVibe}
+            />
+            <button aria-label="Add custom vibe" className="icon-button" onClick={addCustomVibe} type="button">
+              <Plus size={16} />
+            </button>
+          </div>
+        </section>
+
+        <section className="memory-form-section">
+          <SectionHeader icon={<ImagePlus size={16} />} title="Add photos or videos" />
+          <p className="section-helper">{selectedFileCount}/10 files selected</p>
+          <label className="photo-picker">
+            <ImagePlus size={18} />
+            <span>{remainingFileSlots ? "Add media" : "Limit reached"}</span>
+            <input
+              accept="image/*,video/*"
+              disabled={remainingFileSlots === 0}
+              multiple
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                setPhotos((current) => [...current, ...files.slice(0, remainingFileSlots)]);
+                event.currentTarget.value = "";
+              }}
+              type="file"
+            />
+          </label>
+          <div className="photo-preview-grid">
+            {photoUrlsToKeep.map((url) => (
+              <div className="photo-preview" key={url}>
+                {isVideoUrl(url) ? (
+                  <video src={url} muted playsInline />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="" src={url} />
+                )}
+                <button
+                  aria-label="Remove media"
+                  onClick={() => setPhotoUrlsToKeep((current) => current.filter((item) => item !== url))}
+                  type="button"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {previewUrls.map(({ file, url }) => (
+              <div className="photo-preview" key={url}>
+                {isVideoFile(file) ? (
+                  <video src={url} muted playsInline />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="" src={url} />
+                )}
+                <button
+                  aria-label="Remove media"
+                  onClick={() => setPhotos((current) => current.filter((item) => item !== file))}
+                  type="button"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="memory-form-section">
+          <SectionHeader icon={<Smile size={16} />} title="How are you feeling?" />
+          <div className="feeling-grid">
+            {defaultFeelings.map((item) => (
+              <button
+                className={`feeling-pill ${feeling === item ? "active" : ""}`}
+                key={item}
+                onClick={() => {
+                  setFeeling((current) => current === item ? "" : item);
+                  setCustomFeeling("");
+                }}
+                type="button"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <input
+            className="custom-feeling-input"
+            onChange={(event) => {
+              setCustomFeeling(event.target.value);
+              if (event.target.value.trim()) setFeeling("");
+            }}
+            placeholder="Add your own feeling"
+            value={customFeeling}
+          />
+        </section>
+
+        <section className="memory-form-section">
+          <SectionHeader icon={<Users size={16} />} title="Who can see this?" />
+          <div className="visibility-grid">
+            <VisibilityCard
+              active={visibility === "just-me"}
+              eyebrow="Private"
+              icon={<Heart size={18} />}
+              label="Just me"
+              onClick={() => setVisibility("just-me")}
+            />
+            <VisibilityCard
+              active={visibility === "group"}
+              eyebrow="Only selected group"
+              icon={<Users size={18} />}
+              label="Group"
+              onClick={() => setVisibility("group")}
+            />
+            <VisibilityCard
+              active={visibility === "everyone"}
+              eyebrow="Public on my map"
+              icon={<Sparkles size={18} />}
+              label="Everyone"
+              onClick={() => setVisibility("everyone")}
+            />
+          </div>
+          {visibility === "group" ? (
+            groups.length > 0 ? (
+              <label>
+                <span>Choose a group</span>
+                <select
+                  className="memory-select"
+                  disabled={Boolean(editingMemory?.groupId)}
+                  onChange={(event) => setSelectedGroupId(event.target.value)}
+                  value={selectedGroupId}
+                >
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="memory-empty-state">No groups yet.</p>
+            )
+          ) : null}
+        </section>
+
+        <label className="terms-row">
+          <input
+            checked={termsAccepted}
+            onChange={(event) => setTermsAccepted(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms & Conditions</a>
+          </span>
+        </label>
 
         {validationError ? <p className="memory-validation-error">{validationError}</p> : null}
 
-        <button
-          className="primary-button"
-          disabled={isSaving}
-          type="submit"
-        >
-          {isSaving ? "Saving..." : editingMemory ? "Update memory" : "Save memory"}
+        <button className="primary-button save-memory-button" disabled={!canSubmit} type="submit">
+          {isSaving ? "Saving..." : "Save Memory ✨"}
         </button>
       </form>
     </div>
+  );
+}
+
+function SectionHeader({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <div className="memory-section-header">
+      <span>{icon}</span>
+      <h3>{title}</h3>
+    </div>
+  );
+}
+
+function VisibilityCard({
+  active,
+  eyebrow,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  eyebrow: string;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className={`visibility-card ${active ? "active" : ""}`} onClick={onClick} type="button">
+      {icon}
+      <strong>{label}</strong>
+      <span>{eyebrow}</span>
+    </button>
   );
 }

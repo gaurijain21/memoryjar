@@ -21,7 +21,7 @@ import type { Group, ViewMode, AppPage, Memory } from "@/types/memory";
 // Pending action types for login redirects
 export type PendingAction =
   | { type: "sign-in" }
-  | { type: "add-memory" }
+  | { type: "add-memory"; groupId?: string }
   | { type: "create-group" }
   | { type: "edit-memories" }
   | { type: "view-groups" }
@@ -156,6 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (user && pendingAction) {
       switch (pendingAction.type) {
         case "edit-memories":
+          setViewMode("my-memories");
           setCurrentPage("edit-memories");
           break;
         case "view-groups":
