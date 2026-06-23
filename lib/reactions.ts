@@ -15,6 +15,17 @@ export type ReactionSummary = Record<string, {
   reactedByMe: boolean;
 }>;
 
+export type NormalizedReactionSummary = {
+  emojiCounts: Record<string, number>;
+  totalCount: number;
+  topEmojis: Array<{ emoji: string; count: number }>;
+  lastEmoji?: string;
+  lastReactionAt?: number;
+  lastReactionBy?: string;
+};
+
+export type ReactionSummaryMap = Record<string, NormalizedReactionSummary>;
+
 export function emojiKey(emoji: string) {
   return Array.from(emoji).map((char) => char.codePointAt(0)?.toString(16)).join("-");
 }
@@ -23,6 +34,51 @@ export function getReactionKey(memory: Memory) {
   if (memory.groupId) return `group_${memory.groupId}_${memory.sourceMemoryId ?? memory.id}`;
   if (memory.audience === "public" && memory.ownerId) return `public_${memory.ownerId}_${memory.sourceMemoryId ?? memory.id}`;
   return `private_${memory.ownerId ?? "owner"}_${memory.sourceMemoryId ?? memory.id}`;
+}
+
+export function normalizeReactionSummary(
+  summary: ReactionSummary | Record<string, number> | undefined,
+  options?: { lastEmoji?: string; lastReactionAt?: number; lastReactionBy?: string },
+): NormalizedReactionSummary {
+  const emojiCounts = Object.entries(summary ?? {}).reduce<Record<string, number>>((result, [emoji, value]) => {
+    const count = typeof value === "number" ? value : value.count;
+    if (count > 0) result[emoji] = count;
+    return result;
+  }, {});
+  const topEmojis = Object.entries(emojiCounts)
+    .sort(([, firstCount], [, secondCount]) => secondCount - firstCount)
+    .map(([emoji, count]) => ({ emoji, count }));
+
+  return {
+    emojiCounts,
+    totalCount: Object.values(emojiCounts).reduce((total, count) => total + count, 0),
+    topEmojis,
+    lastEmoji: options?.lastEmoji,
+    lastReactionAt: options?.lastReactionAt,
+    lastReactionBy: options?.lastReactionBy,
+  };
+}
+
+export function getReactionSummary(
+  memory: Memory & {
+    reactionSummary?: NormalizedReactionSummary;
+    reactions?: Record<string, number>;
+    reactionCount?: number;
+    likeCount?: number;
+    likes?: number;
+  },
+): NormalizedReactionSummary {
+  if (memory.reactionSummary) return memory.reactionSummary;
+
+  const normalized = normalizeReactionSummary(memory.reactions);
+  if (normalized.totalCount > 0) return normalized;
+
+  const fallbackTotal = memory.reactionCount ?? memory.likeCount ?? memory.likes ?? 0;
+  return {
+    emojiCounts: {},
+    totalCount: fallbackTotal,
+    topEmojis: [],
+  };
 }
 
 function getReactionMeta(memory: Memory) {
@@ -116,20 +172,56 @@ export async function ensureReactionDocument(memory: Memory) {
 }
 
 export function subscribeToReactionEvents(
-  onNext: (events: Array<{ id: string; emoji: string; reactionAt: number }>) => void,
+  onNext: (events: Array<{ id: string; emoji: string; reactionAt: number; reactionBy: string }>) => void,
   onError: (error: Error) => void,
 ) {
   return onSnapshot(
     collection(db, "memoryReactions"),
     (snapshot) => {
       onNext(snapshot.docChanges().map((change) => {
-        const data = change.doc.data() as { lastEmoji?: string; lastReactionAt?: { toMillis?: () => number } };
+        const data = change.doc.data() as { lastEmoji?: string; lastReactionAt?: { toMillis?: () => number }; lastReactionBy?: string };
         return {
           id: change.doc.id,
           emoji: data.lastEmoji ?? "",
           reactionAt: data.lastReactionAt?.toMillis?.() ?? 0,
+          reactionBy: data.lastReactionBy ?? "",
         };
       }).filter((event) => Boolean(event.emoji)));
+    },
+    onError,
+  );
+}
+
+export function subscribeToReactionSummaries(
+  onNext: (summaryMap: ReactionSummaryMap) => void,
+  onError: (error: Error) => void,
+) {
+  return onSnapshot(
+    collection(db, "memoryReactions"),
+    (snapshot) => {
+      const nextSummaryMap = snapshot.docs.reduce<ReactionSummaryMap>((result, snapshotDoc) => {
+        const data = snapshotDoc.data() as {
+          counts?: Record<string, number>;
+          emojis?: Record<string, string>;
+          lastEmoji?: string;
+          lastReactionAt?: { toMillis?: () => number };
+          lastReactionBy?: string;
+        };
+        const emojiCounts = Object.entries(data.counts ?? {}).reduce<Record<string, number>>((counts, [key, count]) => {
+          if (count <= 0) return counts;
+          counts[data.emojis?.[key] ?? "✨"] = count;
+          return counts;
+        }, {});
+
+        result[snapshotDoc.id] = normalizeReactionSummary(emojiCounts, {
+          lastEmoji: data.lastEmoji ?? "",
+          lastReactionAt: data.lastReactionAt?.toMillis?.() ?? 0,
+          lastReactionBy: data.lastReactionBy ?? "",
+        });
+        return result;
+      }, {});
+
+      onNext(nextSummaryMap);
     },
     onError,
   );

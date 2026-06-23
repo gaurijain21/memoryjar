@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { LoginScreen } from "@/components/Auth/LoginScreen";
 import { AddMemoryModal } from "@/components/Memory/AddMemoryModal";
 import { AggregateDetailPanel } from "@/components/Memory/AggregateDetailPanel";
 import { MemoryConfetti } from "@/components/Memory/MemoryConfetti";
-import { PublicActivityNotifications } from "@/components/Memory/PublicActivityNotifications";
 import { TopNavBar } from "@/components/Navigation/TopNavBar";
 import {
   AppShell,
+  type LiveActivityItem,
   LiveActivityPanel,
   MapLegend,
   MemoryToastStack,
@@ -41,6 +41,7 @@ import {
   trackMemoryEdited,
   trackPhotoUploaded,
 } from "@/lib/analytics";
+import { getReactionKey, subscribeToReactionEvents, subscribeToReactionSummaries, type ReactionSummaryMap } from "@/lib/reactions";
 import { sortMemoriesNewestFirst } from "@/lib/memorySort";
 import type { AggregateMarker, AggregatePreviewItem, Memory, MemoryDestination, MemoryInput, SelectedLocation } from "@/types/memory";
 
@@ -60,6 +61,27 @@ function getAggregateKey(memory: Pick<Memory, "lat" | "lng" | "placeId">) {
 function sortNewestFirst(memories: Memory[]) {
   return sortMemoriesNewestFirst(memories);
 }
+
+function getLiveActivityMemoryId(memory: Memory) {
+  return `memory:${memory.groupId ?? memory.ownerId ?? "memory"}:${memory.sourceMemoryId ?? memory.id}`;
+}
+
+function getLiveActivityTimestamp(memory: Memory) {
+  return memory.createdAt?.toMillis?.() ?? memory.updatedAt?.toMillis?.() ?? (Date.parse(memory.date || "") || 0);
+}
+
+function getLiveActivityReactionMemoryId(memory: Memory) {
+  return getReactionKey(memory);
+}
+
+type LiveReactionActivity = {
+  id: string;
+  type: "reaction";
+  memory: Memory;
+  emoji: string;
+  actorLabel: string;
+  reactionAt: number;
+};
 
 export function MemoryJarApp() {
   const {
@@ -95,6 +117,13 @@ export function MemoryJarApp() {
   const [isPinDropMode, setIsPinDropMode] = useState(false);
   const [guestPublicPreviewCount, setGuestPublicPreviewCount] = useState(0);
   const [isRecentDrawerOpen, setIsRecentDrawerOpen] = useState(false);
+  const [liveActivityItems, setLiveActivityItems] = useState<LiveActivityItem[]>([]);
+  const [reactionSummaries, setReactionSummaries] = useState<ReactionSummaryMap>({});
+  const [reactionSummariesLoaded, setReactionSummariesLoaded] = useState(false);
+  const liveActivitySeenPostIdsRef = useRef(new Set<string>());
+  const liveActivitySeenReactionIdsRef = useRef(new Set<string>());
+  const liveActivityRemovalTimersRef = useRef(new Map<string, number>());
+  const liveActivityInitializedRef = useRef(false);
   const groupListenerKey = useMemo(
     () => groups
       .map((group) => group.id)
@@ -106,6 +135,22 @@ export function MemoryJarApp() {
   const groupNameMap = useMemo(
     () => Object.fromEntries(groups.map((group) => [group.id, group.name])),
     [groups],
+  );
+  const memberNameMap = useMemo(
+    () => {
+      const entries = new Map<string, string>();
+      groups.forEach((group) => {
+        Object.values(group.members ?? {}).forEach((member) => {
+          if (!member?.uid) return;
+          entries.set(member.uid, member.displayName || member.email || "Someone");
+        });
+      });
+      if (user?.uid) {
+        entries.set(user.uid, user.displayName || user.email || "You");
+      }
+      return entries;
+    },
+    [groups, user],
   );
 
   const handleSubscriptionError = useCallback((snapshotError: Error & { code?: string }) => {
@@ -166,6 +211,14 @@ export function MemoryJarApp() {
       handleSubscriptionError,
     );
   }, [handleSubscriptionError]);
+
+  useEffect(() => subscribeToReactionSummaries(
+    (summaryMap) => {
+      setReactionSummaries(summaryMap);
+      setReactionSummariesLoaded(true);
+    },
+    (reactionError) => console.warn("[MemoryJar reactions] summary listener failed", reactionError),
+  ), []);
 
   const aggregateMarkers = useMemo(() => {
     const publicByAggregate = new Map<string, Memory[]>();
@@ -320,6 +373,75 @@ export function MemoryJarApp() {
     [groupTimelineMemories, personalTimelineMemories],
   );
 
+  const withReactionSummary = useCallback(
+    (memory: Memory) => ({
+      ...memory,
+      reactionSummary: reactionSummaries[getReactionKey(memory)],
+    }),
+    [reactionSummaries],
+  );
+
+  const liveActivityMemoryTargets = useMemo(
+    () => {
+      const targets = new Map<string, Memory>();
+
+      publicMemories.forEach((memory) => {
+        if (!memory.photoUrls[0]) return;
+        targets.set(getLiveActivityReactionMemoryId(memory), withReactionSummary(memory));
+      });
+
+      if (user) {
+        personalTimelineMemories.forEach((memory) => {
+          if (!memory.photoUrls[0]) return;
+          targets.set(getLiveActivityReactionMemoryId(memory), withReactionSummary(memory));
+        });
+      }
+
+      groupTimelineMemories.forEach((memory) => {
+        if (!memory.photoUrls[0]) return;
+        targets.set(getLiveActivityReactionMemoryId(memory), withReactionSummary(memory));
+      });
+
+      return targets;
+    },
+    [groupTimelineMemories, personalTimelineMemories, publicMemories, user, withReactionSummary],
+  );
+
+  const liveActivityPostMemories = useMemo(
+    () => sortNewestFirst([...publicMemories, ...groupTimelineMemories].filter((memory) => Boolean(memory.photoUrls[0]))).map(withReactionSummary),
+    [groupTimelineMemories, publicMemories, withReactionSummary],
+  );
+
+  const liveActivityInitialReactionItems = useMemo(
+    () => Object.entries(reactionSummaries)
+      .map(([reactionId, summary]) => {
+        const memory = liveActivityMemoryTargets.get(reactionId);
+        if (!memory || !summary.lastEmoji || !summary.lastReactionAt) return null;
+
+            return {
+              id: `reaction:${reactionId}:${summary.lastReactionAt}`,
+              type: "reaction" as const,
+              memory,
+              emoji: summary.lastEmoji,
+              actorLabel: memberNameMap.get(summary.lastReactionBy ?? "") ?? (summary.lastReactionBy === user?.uid ? "You" : "Someone"),
+              reactionAt: summary.lastReactionAt,
+            };
+          })
+      .filter((activity): activity is LiveReactionActivity => Boolean(activity))
+      .sort((first, second) => second.reactionAt - first.reactionAt),
+    [liveActivityMemoryTargets, memberNameMap, reactionSummaries, user],
+  );
+
+  const timelineMemoriesWithReactions = useMemo(
+    () => timelineMemories.map(withReactionSummary),
+    [timelineMemories, withReactionSummary],
+  );
+
+  const recentMemoriesWithReactions = useMemo(
+    () => recentMemories.map(withReactionSummary),
+    [recentMemories, withReactionSummary],
+  );
+
   const mapMemories = useMemo(() => {
     if (!user || showEveryoneMode) return publicMemories;
     if (viewMode === "my-memories" || currentGroupId) return memories;
@@ -332,6 +454,11 @@ export function MemoryJarApp() {
       return true;
     });
   }, [currentGroupId, memories, publicMemories, showEveryoneMode, user, viewMode]);
+
+  const mapMemoriesWithReactions = useMemo(
+    () => mapMemories.map(withReactionSummary),
+    [mapMemories, withReactionSummary],
+  );
 
   // Subscribe to memories based on view mode
   useEffect(() => {
@@ -770,6 +897,155 @@ export function MemoryJarApp() {
     ? (`group-${currentGroupId}` as MemoryDestination)
     : "my-memories";
 
+  useEffect(() => {
+    if (!liveActivityInitializedRef.current) {
+      if (!reactionSummariesLoaded) return;
+
+      const initialActivities = [
+        ...liveActivityPostMemories.map((memory) => ({
+          id: getLiveActivityMemoryId(memory),
+          type: "memory" as const,
+          memory,
+          sortAt: getLiveActivityTimestamp(memory),
+        })),
+        ...liveActivityInitialReactionItems.map((activity) => ({
+          ...activity,
+          sortAt: activity.reactionAt,
+        })),
+      ]
+        .sort((first, second) => second.sortAt - first.sortAt)
+        .slice(0, 3)
+        .reverse()
+        .map(({ sortAt, ...activity }) => {
+          void sortAt;
+          return activity;
+        });
+
+      initialActivities.forEach((activity) => {
+        if (activity.type === "reaction") {
+          liveActivitySeenReactionIdsRef.current.add(activity.id);
+          return;
+        }
+
+        liveActivitySeenPostIdsRef.current.add(activity.id);
+      });
+
+      setLiveActivityItems(initialActivities);
+      liveActivityInitializedRef.current = true;
+      return;
+    }
+
+    const newPostMemories = liveActivityPostMemories
+      .filter((memory) => !liveActivitySeenPostIdsRef.current.has(getLiveActivityMemoryId(memory)))
+      .sort((a, b) => getLiveActivityTimestamp(a) - getLiveActivityTimestamp(b));
+
+    if (!newPostMemories.length) return;
+
+    setLiveActivityItems((current) => {
+      let next = [...current];
+
+      newPostMemories.forEach((memory) => {
+        const id = getLiveActivityMemoryId(memory);
+        liveActivitySeenPostIdsRef.current.add(id);
+        next = [...next, { id, type: "memory", memory }];
+
+        const activeCount = next.filter((activity) => !activity.isExiting).length;
+        if (activeCount > 3) {
+          const oldestIndex = next.findIndex((activity) => !activity.isExiting);
+          if (oldestIndex >= 0) {
+            next = next.map((activity, index) => index === oldestIndex ? { ...activity, isExiting: true } : activity);
+          }
+        }
+      });
+
+      return next;
+    });
+  }, [liveActivityInitialReactionItems, liveActivityPostMemories, reactionSummariesLoaded]);
+
+  useEffect(() => {
+    const removalTimers = liveActivityRemovalTimersRef.current;
+
+    liveActivityItems.forEach((activity) => {
+      if (activity.isExiting) {
+        if (!removalTimers.has(activity.id)) {
+          const removalId = window.setTimeout(() => {
+            removalTimers.delete(activity.id);
+            setLiveActivityItems((current) => current.filter((item) => item.id !== activity.id));
+          }, 320);
+          removalTimers.set(activity.id, removalId);
+        }
+      }
+    });
+
+    return () => {
+      const currentIds = new Set(liveActivityItems.map((activity) => activity.id));
+      removalTimers.forEach((timerId, id) => {
+        if (!currentIds.has(id)) {
+          window.clearTimeout(timerId);
+          removalTimers.delete(id);
+        }
+      });
+    };
+  }, [liveActivityItems]);
+
+  useEffect(() => () => {
+    liveActivityRemovalTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+  }, []);
+
+  useEffect(() => {
+    let initialized = false;
+
+    return subscribeToReactionEvents(
+      (events) => {
+        if (!initialized) {
+          initialized = true;
+          return;
+        }
+
+        const nextActivities = events
+          .filter((event) => event.emoji)
+          .map((event) => {
+            const memory = liveActivityMemoryTargets.get(event.id);
+            if (!memory) return null;
+
+            return {
+              id: `reaction:${event.id}:${event.reactionAt}`,
+              type: "reaction" as const,
+              memory,
+              emoji: event.emoji,
+              actorLabel: memberNameMap.get(event.reactionBy) ?? (event.reactionBy === user?.uid ? "You" : "Someone"),
+              reactionAt: event.reactionAt,
+            };
+          })
+          .filter((activity): activity is LiveReactionActivity => Boolean(activity))
+          .sort((a, b) => a.reactionAt - b.reactionAt);
+
+        if (!nextActivities.length) return;
+
+        setLiveActivityItems((current) => {
+          let next = [...current];
+
+          nextActivities.forEach(({ reactionAt, ...activity }) => {
+            void reactionAt;
+            if (liveActivitySeenReactionIdsRef.current.has(activity.id) || next.some((item) => item.id === activity.id)) return;
+            liveActivitySeenReactionIdsRef.current.add(activity.id);
+            next = [...next, activity];
+            const activeCount = next.filter((item) => !item.isExiting).length;
+            if (activeCount > 3) {
+              const oldestIndex = next.findIndex((item) => !item.isExiting);
+              if (oldestIndex >= 0) {
+                next = next.map((item, index) => index === oldestIndex ? { ...item, isExiting: true } : item);
+              }
+            }
+          });
+
+          return next;
+        });
+      },
+      (reactionError) => console.warn("[MemoryJar reactions] live activity listener failed", reactionError),
+    );
+  }, [liveActivityMemoryTargets, memberNameMap, user]);
+
   if (user && currentPage === "personal-info") {
     return (
       <div className="app-shell-with-nav">
@@ -787,14 +1063,10 @@ export function MemoryJarApp() {
         onDismiss={() => setSuccessMessage(null)}
       />
       <MemoryConfetti />
-      <PublicActivityNotifications
-        hidden={Boolean(selectedMemory || selectedAggregate || isModalOpen)}
-        memories={publicMemories}
-      />
 
       {currentPage === "timeline" ? (
         <TimelinePage
-          memories={timelineMemories}
+          memories={timelineMemoriesWithReactions}
           onDeleteMemory={handleDeleteTimelineMemory}
           onEditMemory={handleEditMemory}
         />
@@ -809,7 +1081,7 @@ export function MemoryJarApp() {
               draftLocation={selectedLocation}
               aggregateMarkers={aggregateMarkers}
               isPinDropMode={isPinDropMode}
-              memories={mapMemories}
+              memories={mapMemoriesWithReactions}
               selectedAggregate={selectedAggregate}
               viewMode={showEveryoneMode ? "everyone" : viewMode}
               onLocationSelected={setSelectedLocation}
@@ -821,7 +1093,7 @@ export function MemoryJarApp() {
             />
             <RecentMemoriesDrawer
               isOpen={isRecentDrawerOpen}
-              memories={recentMemories}
+              memories={recentMemoriesWithReactions}
               onOpenChange={setIsRecentDrawerOpen}
               onSelectMemory={handleSelectTimelineMemory}
             />
@@ -829,7 +1101,7 @@ export function MemoryJarApp() {
             {!isRecentDrawerOpen ? (
               <aside className="map-floating-rail">
                 <SelectedMemoryPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
-                <LiveActivityPanel memories={recentMemories} />
+                <LiveActivityPanel activities={liveActivityItems.filter((activity) => !activity.isExiting).slice(-3)} />
               </aside>
             ) : null}
           </div>

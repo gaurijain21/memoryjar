@@ -4,7 +4,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import { GoogleMap, Marker, OverlayView, useJsApiLoader } from "@react-google-maps/api";
 import { Compass, Heart, LocateFixed, Minus, Plus } from "lucide-react";
 import { getReadableLocationName } from "@/lib/locationText";
-import { getReactionKey, subscribeToReactionEvents } from "@/lib/reactions";
+import { getReactionKey, getReactionSummary, subscribeToReactionEvents } from "@/lib/reactions";
 import type { AggregateMarker, Memory, SelectedLocation, ViewMode } from "@/types/memory";
 
 const libraries: ("places")[] = ["places"];
@@ -18,7 +18,6 @@ const worldBounds = {
 const personalPinColor = "#9b68f2";
 const publicPinColor = "#f6c85f";
 const groupPinColors = ["#6cc7f5", "#8f7cff", "#3ddc97", "#ff8f70", "#d783ff", "#4fd1c5"];
-const ambientReactionEmojis = ["💜", "✨", "😍", "😂", "❤️", "🎉"];
 
 function createBurstId(baseId: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -58,24 +57,8 @@ function getAggregateVariant(marker: AggregateMarker) {
   return variants[0] ?? "private";
 }
 
-function getReactionScore(memory: Memory) {
-  const meta = memory as Memory & {
-    likeCount?: number;
-    likes?: number;
-    reactionCount?: number;
-    reactions?: Record<string, number>;
-  };
-  const reactionTotal = meta.reactions
-    ? Object.values(meta.reactions).reduce((total, value) => total + (typeof value === "number" ? value : 0), 0)
-    : 0;
-
-  return meta.reactionCount ?? meta.likeCount ?? meta.likes ?? reactionTotal ?? 0;
-}
-
 function getMemoryReactionLabel(memory: Memory) {
-  const score = getReactionScore(memory);
-  if (score > 0) return score;
-  return Math.max(3, (memory.title?.length ?? 3) + (memory.vibes?.length ?? 0));
+  return getReactionSummary(memory).totalCount;
 }
 
 type MemoryMapProps = {
@@ -220,7 +203,7 @@ export function MemoryMap({
       memories
         .filter((memory) => memory.groupId === selectedGroupId && memory.photoUrls[0])
         .slice()
-        .sort((first, second) => getReactionScore(second) - getReactionScore(first))
+        .sort((first, second) => getReactionSummary(second).totalCount - getReactionSummary(first).totalCount)
         .slice(0, 3)
         .map((memory) => memory.id),
     );
@@ -228,24 +211,29 @@ export function MemoryMap({
 
   useEffect(() => {
     const targets = memories
-      .filter((memory) => memory.photoUrls[0])
-      .map((memory) => ({ lat: memory.lat, lng: memory.lng }));
+      .filter((memory) => memory.photoUrls[0] && getReactionSummary(memory).topEmojis.length > 0)
+      .map((memory) => ({
+        lat: memory.lat,
+        lng: memory.lng,
+        emojis: getReactionSummary(memory).topEmojis.map(({ emoji }) => emoji),
+      }));
     if (targets.length === 0) return;
 
     const showAmbientBursts = () => {
       const shuffled = targets.slice().sort(() => Math.random() - 0.5).slice(0, 2);
       shuffled.forEach((target, index) => {
         const id = createBurstId(`ambient-${index}`);
-        const emoji = ambientReactionEmojis[Math.floor(Math.random() * ambientReactionEmojis.length)];
-        setReactionBursts((current) => [...current, { id, emoji, ...target }]);
+        const emoji = target.emojis[Math.floor(Math.random() * target.emojis.length)];
+        if (!emoji) return;
+        setReactionBursts((current) => [...current, { id, emoji, lat: target.lat, lng: target.lng }]);
         window.setTimeout(() => {
           setReactionBursts((current) => current.filter((burst) => burst.id !== id));
         }, 4200);
       });
     };
 
-    const timeoutId = window.setTimeout(showAmbientBursts, 900);
-    const intervalId = window.setInterval(showAmbientBursts, 5200);
+    const timeoutId = window.setTimeout(showAmbientBursts, 1200);
+    const intervalId = window.setInterval(showAmbientBursts, 9000);
     return () => {
       window.clearTimeout(timeoutId);
       window.clearInterval(intervalId);

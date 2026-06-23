@@ -34,6 +34,7 @@ import { getMemoryExpandedHref } from "@/lib/expandedMemory";
 import { formatMemoryDate } from "@/lib/formatDate";
 import { clearInviteCode } from "@/lib/inviteStorage";
 import { getReadableLocationName } from "@/lib/locationText";
+import { getReactionSummary } from "@/lib/reactions";
 import type { AppPage, Group, Memory } from "@/types/memory";
 
 export type MemoryJarTheme = "light" | "dark";
@@ -60,7 +61,16 @@ type TopMapControlsProps = {
 };
 
 type LiveActivityPanelProps = {
-  memories: Memory[];
+  activities: LiveActivityItem[];
+};
+
+export type LiveActivityItem = {
+  id: string;
+  type: "memory" | "reaction";
+  memory: Memory;
+  emoji?: string;
+  actorLabel?: string;
+  isExiting?: boolean;
 };
 
 type RecentMemoriesDrawerProps = {
@@ -309,6 +319,12 @@ export function LeftSidebar({
           </div>
         </section>
 
+        <button className="sidebar-add-memory" onClick={onAddMemory} type="button">
+          <Plus size={17} />
+          <span>Add Memory</span>
+          <Sparkles size={15} />
+        </button>
+
         <div className="sidebar-profile">
           <UserAvatar className="sidebar-profile-avatar" email={user?.email} id={user?.uid} name={user?.displayName} photoURL={user?.photoURL} />
           <div>
@@ -381,9 +397,7 @@ export function TopMapControls({ canAddMemory, onAddMemory }: TopMapControlsProp
   );
 }
 
-export function LiveActivityPanel({ memories }: LiveActivityPanelProps) {
-  const activities = memories.slice(0, 3);
-
+export function LiveActivityPanel({ activities }: LiveActivityPanelProps) {
   return (
     <section className="live-activity-card">
       <div className="panel-heading">
@@ -391,16 +405,31 @@ export function LiveActivityPanel({ memories }: LiveActivityPanelProps) {
         <span>{activities.length} updates</span>
       </div>
       <div className="activity-list rolling-feed">
-        {activities.length ? activities.map((memory, index) => (
-          <article className="activity-row" key={`${getMemoryKey(memory)}:${index}`}>
-            <UserAvatar className="activity-avatar" id={memory.ownerId ?? memory.creatorUid ?? memory.id} name={memory.groupName ?? memory.title} />
+        {activities.length ? activities.map((activity) => (
+          <article className={`activity-row ${activity.isExiting ? "exiting" : "entering"}`} key={activity.id}>
             <div>
-              <p>{memory.groupName ? `${memory.groupName} added ${memory.title}` : `Memory added in ${getLocation(memory) || "a saved place"}`}</p>
-              <small>{formatMemoryDate(memory.date)}</small>
+              <p>
+                {activity.type === "reaction"
+                  ? activity.memory.groupId
+                    ? `${activity.actorLabel || "Someone"} reacted ${activity.emoji || ""} in ${activity.memory.groupName ?? "your group"}`
+                    : activity.memory.ownerId
+                      ? `${activity.actorLabel || "Someone"} reacted ${activity.emoji || ""} to your memory`
+                      : `${activity.actorLabel || "Someone"} reacted ${activity.emoji || ""}`
+                  : activity.memory.groupName
+                    ? `${activity.memory.groupName} added ${activity.memory.title}`
+                    : `Memory added in ${getLocation(activity.memory) || "a saved place"}`}
+              </p>
+              <small>{activity.type === "reaction" ? "Just now" : formatMemoryDate(activity.memory.date)}</small>
             </div>
-            {getPhoto(memory) ? (
+            {getPhoto(activity.memory) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img alt="" src={getPhoto(memory) ?? ""} />
+              <img alt="" src={getPhoto(activity.memory) ?? ""} />
+            ) : null}
+            {activity.type === "reaction" && activity.emoji ? (
+              <span className="live-activity-emoji-layer" aria-hidden="true">
+                <span className="live-activity-emoji-float live-activity-emoji-float-one">{activity.emoji}</span>
+                <span className="live-activity-emoji-float live-activity-emoji-float-two">{activity.emoji}</span>
+              </span>
             ) : null}
           </article>
         )) : (
@@ -577,7 +606,11 @@ export function RecentMemoriesDrawer({ isOpen, memories, onOpenChange, onSelectM
                   <strong>{memory.title || "Untitled memory"}</strong>
                   <small>{getLocation(memory)}</small>
                   <span>{formatMemoryDate(memory.date)}</span>
-                  <span className="recent-like"><Heart size={13} fill="currentColor" /> 0</span>
+                  <span className="recent-like">
+                    {getReactionSummary(memory).topEmojis.length
+                      ? getReactionSummary(memory).topEmojis.slice(0, 3).map(({ emoji, count }) => `${emoji} ${count}`).join(" ")
+                      : <><Heart size={13} fill="currentColor" /> 0</>}
+                  </span>
                 </div>
               </button>
             )) : (

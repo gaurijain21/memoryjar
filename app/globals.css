@@ -6395,6 +6395,15 @@ body {
   gap: 9px;
 }
 
+.memoryjar-layout .premium-add-memory,
+.memoryjar-layout .premium-add-memory span,
+.memoryjar-layout .premium-add-memory svg,
+.memoryjar-layout .add-memory-button,
+.memoryjar-layout .add-memory-button span,
+.memoryjar-layout .add-memory-button svg {
+  color: #fff;
+}
+
 .memoryjar-layout .premium-add-memory:hover,
 .memoryjar-layout .light-primary:hover {
   transform: translateY(-1px);
@@ -6863,6 +6872,31 @@ body {
   min-height: 42px;
 }
 
+.sidebar-add-memory {
+  align-items: center;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--mj-purple) 28%, var(--mj-line));
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(116, 88, 237, 0.12);
+  color: var(--mj-purple);
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+  width: 100%;
+}
+
+.sidebar-add-memory span,
+.sidebar-add-memory svg {
+  color: var(--mj-purple);
+}
+
+.sidebar-add-memory:hover {
+  box-shadow: 0 14px 30px rgba(116, 88, 237, 0.2);
+  transform: scale(1.02);
+}
+
 .map-workspace {
   display: grid;
   flex: 1 1 auto;
@@ -6993,6 +7027,84 @@ body {
   max-height: min(42vh, 420px);
   overflow: auto;
   padding-right: 4px;
+}
+
+.live-activity-card .activity-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  overflow: hidden;
+  position: relative;
+  transform-origin: center top;
+  transition: opacity 220ms ease, transform 220ms ease, max-height 220ms ease, margin 220ms ease, padding 220ms ease;
+}
+
+.live-activity-card .activity-row > div {
+  min-width: 0;
+}
+
+.live-activity-card .activity-row.entering {
+  animation: live-activity-enter 240ms ease-out;
+}
+
+.live-activity-card .activity-row.exiting {
+  margin: 0;
+  max-height: 0;
+  opacity: 0;
+  padding-bottom: 0;
+  padding-top: 0;
+  transform: translateY(-10px);
+}
+
+.live-activity-emoji-layer {
+  inset: 0 38px 0 auto;
+  pointer-events: none;
+  position: absolute;
+  width: 48px;
+}
+
+.live-activity-emoji-float {
+  animation: live-activity-emoji-float 4s ease-out forwards;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  top: 50%;
+}
+
+.live-activity-emoji-float-one {
+  transform: translateY(-4px);
+}
+
+.live-activity-emoji-float-two {
+  animation-delay: 140ms;
+  right: 14px;
+  transform: translateY(8px);
+}
+
+@keyframes live-activity-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes live-activity-emoji-float {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-34px) scale(1.08);
+  }
 }
 
 .recent-memories-pill {
@@ -9837,15 +9949,25 @@ body {
 
 /* Dialog, portal, expanded view, and zoom-safe sidebar fixes. */
 .memoryjar-sidebar {
+  --memoryjar-sidebar-pad: clamp(14px, 2vw, 24px);
   display: flex !important;
   flex-direction: column !important;
+  bottom: 0 !important;
+  flex: 0 0 var(--memoryjar-sidebar-width) !important;
   height: 100vh !important;
+  left: 0 !important;
   max-height: 100vh !important;
+  min-height: 0 !important;
   overflow: hidden !important;
+  padding: var(--memoryjar-sidebar-pad) 0 var(--memoryjar-sidebar-pad) var(--memoryjar-sidebar-pad) !important;
+  position: fixed !important;
+  top: 0 !important;
+  width: var(--memoryjar-sidebar-width) !important;
 }
 
 .memoryjar-sidebar .sidebar-brand {
   flex: 0 0 auto;
+  padding-right: var(--memoryjar-sidebar-pad);
 }
 
 .memoryjar-sidebar-scroll {
@@ -9854,9 +9976,38 @@ body {
   flex-direction: column;
   gap: 18px;
   min-height: 0;
+  overscroll-behavior: contain;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 0 var(--memoryjar-sidebar-pad) 24px 0;
+}
+
+.memoryjar-layout {
+  --memoryjar-sidebar-width: clamp(230px, 18vw, 306px);
+}
+
+.memoryjar-main-shell {
+  margin-left: var(--memoryjar-sidebar-width) !important;
+  width: calc(100vw - var(--memoryjar-sidebar-width)) !important;
+}
+
+.memoryjar-sidebar-scroll .sidebar-nav,
+.memoryjar-sidebar-scroll .memory-streak-card,
+.memoryjar-sidebar-scroll .sidebar-add-memory,
+.memoryjar-sidebar-scroll .sidebar-profile,
+.memoryjar-sidebar-scroll .theme-toggle {
+  flex: 0 0 auto;
+}
+
+.memoryjar-sidebar-scroll .sidebar-section {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.memoryjar-sidebar-scroll .sidebar-groups {
+  max-height: none;
+  min-height: auto;
+  overflow: visible;
 }
 
 .memoryjar-sidebar-scroll::-webkit-scrollbar {
@@ -9973,11 +10124,11 @@ body {
 .expanded-view-button,
 .expanded-view-button.light {
   align-items: center;
-  background: linear-gradient(135deg, #a653ff, #ff6fb2) !important;
-  border: 0 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(166, 83, 255, 0.22) !important;
   border-radius: 999px !important;
-  box-shadow: 0 14px 28px rgba(166, 83, 255, 0.24);
-  color: #fff !important;
+  box-shadow: 0 12px 24px rgba(90, 101, 136, 0.12);
+  color: #4f46c8 !important;
   display: inline-flex;
   font-weight: 900;
   gap: 8px;
@@ -9990,13 +10141,17 @@ body {
 
 .expanded-view-button svg,
 .expanded-view-button * {
-  color: #fff !important;
+  color: #4f46c8 !important;
 }
 
 .expanded-memory-view {
   background: #f8f6ff !important;
   color: #171827 !important;
   min-height: 100vh;
+}
+
+.expanded-gallery {
+  background: #fcfbff !important;
 }
 
 .expanded-memory-details {
@@ -10076,13 +10231,48 @@ body {
 
 :root[data-memoryjar-theme="dark"] .memoryjar-topbar .premium-add-memory,
 :root[data-memoryjar-theme="dark"] .memoryjar-topbar .premium-add-memory span,
-:root[data-memoryjar-theme="dark"] .memoryjar-topbar .premium-add-memory svg {
+:root[data-memoryjar-theme="dark"] .memoryjar-topbar .premium-add-memory svg,
+:root[data-memoryjar-theme="dark"] .add-memory-button,
+:root[data-memoryjar-theme="dark"] .add-memory-button span,
+:root[data-memoryjar-theme="dark"] .add-memory-button svg,
+:root[data-memoryjar-theme="dark"] .sidebar-add-memory,
+:root[data-memoryjar-theme="dark"] .sidebar-add-memory span,
+:root[data-memoryjar-theme="dark"] .sidebar-add-memory svg {
   color: #fff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-view-button,
+:root[data-memoryjar-theme="dark"] .expanded-view-button.light {
+  background: rgba(25, 29, 44, 0.88) !important;
+  border-color: rgba(166, 83, 255, 0.24) !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24) !important;
+  color: #a879ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-view-button svg,
+:root[data-memoryjar-theme="dark"] .expanded-view-button * {
+  color: #a879ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .sidebar-add-memory {
+  background: var(--mj-panel-solid) !important;
+  border-color: color-mix(in srgb, var(--mj-purple) 38%, var(--mj-line)) !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24) !important;
+  color: var(--mj-purple) !important;
+}
+
+:root[data-memoryjar-theme="dark"] .sidebar-add-memory span,
+:root[data-memoryjar-theme="dark"] .sidebar-add-memory svg {
+  color: var(--mj-purple) !important;
 }
 
 :root[data-memoryjar-theme="dark"] .expanded-memory-view {
   background: #0e1220 !important;
   color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-gallery {
+  background: #131827 !important;
 }
 
 :root[data-memoryjar-theme="dark"] .expanded-memory-details {
@@ -10116,8 +10306,8 @@ body {
 
 @media (max-width: 900px) {
   .memoryjar-sidebar {
-    height: auto !important;
-    max-height: 42vh !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
   }
 
   .memoryjar-sidebar-scroll {

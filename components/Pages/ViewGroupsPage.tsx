@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Users, Crown, Trash2, LogOut, Check, Link2, Plus } from "lucide-react";
+import { ArrowLeft, Users, Crown, Trash2, LogOut, Check, Link2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
 import { deleteGroup, leaveGroup, removeMember } from "@/lib/groups";
@@ -13,7 +13,7 @@ type ViewGroupsPageProps = {
 };
 
 export function ViewGroupsPage({ embedded = false }: ViewGroupsPageProps) {
-  const { user, groups, setCurrentPage, setPendingAction, setViewMode } = useApp();
+  const { user, groups, setCurrentPage, setViewMode } = useApp();
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState<string | null>(null);
@@ -138,12 +138,6 @@ export function ViewGroupsPage({ embedded = false }: ViewGroupsPageProps) {
           </button>
         ) : null}
         <h1 className="page-title">Your Groups</h1>
-        {embedded ? (
-          <button className="primary-button light-primary" onClick={() => setPendingAction({ type: "create-group" })} type="button">
-            <Plus size={16} />
-            Create Group
-          </button>
-        ) : null}
       </div>
 
       {error && <div className="page-error">{error}</div>}

@@ -8,6 +8,7 @@ import { getMemoryExpandedHref } from "@/lib/expandedMemory";
 import { formatMemoryDate } from "@/lib/formatDate";
 import { getReadableLocationName } from "@/lib/locationText";
 import { sortMemoriesNewestFirst } from "@/lib/memorySort";
+import { getReactionSummary } from "@/lib/reactions";
 import type { Memory } from "@/types/memory";
 
 type TimelinePageProps = {
@@ -81,6 +82,7 @@ export function TimelinePage({ memories, onDeleteMemory, onEditMemory }: Timelin
                   {group.memories.map((memory) => {
                     const canManage = Boolean(user && (memory.ownerId === user.uid || memory.creatorUid === user.uid || (!memory.groupId && !memory.ownerId)));
                     const photo = memory.photoUrls[0] ?? null;
+                    const reactionSummary = getReactionSummary(memory);
 
                     return (
                       <article className="timeline-memory-card" key={getMemoryKey(memory)}>
@@ -103,8 +105,11 @@ export function TimelinePage({ memories, onDeleteMemory, onEditMemory }: Timelin
                           <p><MapPin size={14} /> {getLocation(memory) || "Saved place"}</p>
                           <span>{formatMemoryDate(memory.date, "long")}</span>
                           <div className="timeline-card-meta">
-                            <span><Heart size={14} fill="currentColor" /> 0</span>
-                            <span>✨ 0</span>
+                            <span>
+                              {reactionSummary.topEmojis.length
+                                ? reactionSummary.topEmojis.slice(0, 3).map(({ emoji, count }) => `${emoji} ${count}`).join(" ")
+                                : <><Heart size={14} fill="currentColor" /> 0</>}
+                            </span>
                             <Link href={getMemoryExpandedHref(memory)} target="_blank" rel="noopener noreferrer">
                               <Eye size={14} />
                               Open

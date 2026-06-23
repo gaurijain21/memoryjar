@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { SmilePlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { subscribeToMemoryReactions, toggleMemoryReaction, type ReactionSummary } from "@/lib/reactions";
+import { normalizeReactionSummary, subscribeToMemoryReactions, toggleMemoryReaction, type ReactionSummary } from "@/lib/reactions";
 import type { Memory } from "@/types/memory";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
@@ -24,7 +24,7 @@ export function MemoryReactions({ memory, uid, onReacted, onRequireLogin }: Memo
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reactions = useMemo(
-    () => Object.entries(summary).sort(([, a], [, b]) => b.count - a.count),
+    () => normalizeReactionSummary(summary).topEmojis.map(({ emoji, count }) => [emoji, { count, reactedByMe: Boolean(summary[emoji]?.reactedByMe) }] as const),
     [summary],
   );
 
