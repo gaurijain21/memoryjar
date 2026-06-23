@@ -28,6 +28,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { CreateGroupModal } from "@/components/Groups/CreateGroupModal";
 import { PlaceSearch } from "@/components/Map/PlaceSearch";
 import type { Group, Memory, MemoryAudience, MemoryDestination, MemoryInput, SelectedLocation } from "@/types/memory";
 
@@ -113,6 +114,7 @@ export function AddMemoryModal({
   const [customFeeling, setCustomFeeling] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [validationError, setValidationError] = useState("");
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -267,7 +269,7 @@ export function AddMemoryModal({
         </div>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<MapPin size={16} />} title="Where did this happen?" />
+          <SectionHeader icon={<MapPin size={16} />} title="Where?" />
           <PlaceSearch
             className="drawer-place-search"
             onPlaceSelected={(location) => {
@@ -289,9 +291,9 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Sparkles size={16} />} title="What's this memory called?" />
+          <SectionHeader icon={<Sparkles size={16} />} title="Name it" />
           <label>
-            <span>Give it a name</span>
+            <span>Name it</span>
             <input
               maxLength={70}
               onChange={(event) => setTitle(event.target.value)}
@@ -313,7 +315,7 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Camera size={16} />} title="When did this happen?" />
+          <SectionHeader icon={<Camera size={16} />} title="When?" />
           <label>
             <span>Date</span>
             <input
@@ -326,7 +328,7 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Zap size={16} />} title="What's the vibe?" />
+          <SectionHeader icon={<Zap size={16} />} title="The vibe" />
           <div className="vibe-grid">
             {defaultVibes.map(({ label, icon: Icon }) => (
               <button
@@ -359,7 +361,7 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<ImagePlus size={16} />} title="Drop your favorite moments" />
+          <SectionHeader icon={<ImagePlus size={16} />} title="Photos" />
           <p className="section-helper">{selectedFileCount}/10 files selected</p>
           <label className="photo-picker">
             <ImagePlus size={18} />
@@ -415,7 +417,7 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Smile size={16} />} title="How did it feel?" />
+          <SectionHeader icon={<Smile size={16} />} title="How'd it feel?" />
           <div className="feeling-grid">
             {defaultFeelings.map((item) => (
               <button
@@ -443,7 +445,7 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Users size={16} />} title="Who can see this?" />
+          <SectionHeader icon={<Users size={16} />} title="Who sees it?" />
           <div className="visibility-grid">
             <VisibilityCard
               active={visibility === "just-me"}
@@ -453,40 +455,47 @@ export function AddMemoryModal({
               onClick={() => setVisibility("just-me")}
             />
             <VisibilityCard
-              active={visibility === "group"}
-              eyebrow="Only selected group"
-              icon={<Users size={18} />}
-              label="Group"
-              onClick={() => setVisibility("group")}
-            />
-            <VisibilityCard
               active={visibility === "everyone"}
               eyebrow="Public on my map"
               icon={<Sparkles size={18} />}
               label="Everyone"
               onClick={() => setVisibility("everyone")}
             />
+            <VisibilityCard
+              active={visibility === "group"}
+              eyebrow="Only selected group"
+              icon={<Users size={18} />}
+              label="Group"
+              onClick={() => setVisibility("group")}
+            />
           </div>
           {visibility === "group" ? (
-            groups.length > 0 ? (
-              <label>
-                <span>Choose a group</span>
-                <select
-                  className="memory-select"
-                  disabled={Boolean(editingMemory?.groupId)}
-                  onChange={(event) => setSelectedGroupId(event.target.value)}
-                  value={selectedGroupId}
-                >
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <p className="memory-empty-state">No groups yet.</p>
-            )
+            <label>
+              <span>Choose a group</span>
+              <select
+                className="memory-select"
+                disabled={Boolean(editingMemory?.groupId)}
+                onChange={(event) => {
+                  if (event.target.value === "__create_group__") {
+                    setIsCreateGroupOpen(true);
+                    return;
+                  }
+                  setSelectedGroupId(event.target.value);
+                }}
+                value={selectedGroupId}
+              >
+                {!selectedGroupId ? <option value="">Pick a group</option> : null}
+                {selectedGroupId && !groups.some((group) => group.id === selectedGroupId) ? (
+                  <option value={selectedGroupId}>New group</option>
+                ) : null}
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+                <option value="__create_group__">+ Create a group</option>
+              </select>
+            </label>
           ) : null}
         </section>
 
@@ -497,16 +506,30 @@ export function AddMemoryModal({
             type="checkbox"
           />
           <span>
-            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms & Conditions</a>
+            I have the right to share these photos and memories
           </span>
         </label>
+        <p className="terms-links">
+          <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
+          <span>&</span>
+          <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy</a>
+        </p>
 
         {validationError ? <p className="memory-validation-error">{validationError}</p> : null}
 
         <button className="primary-button save-memory-button" disabled={!canSubmit} type="submit">
-          {isSaving ? "Saving..." : "Save Memory ✨"}
+          {isSaving ? "Saving..." : "Add to my jar"}
         </button>
       </form>
+      {isCreateGroupOpen ? (
+        <CreateGroupModal
+          onClose={() => setIsCreateGroupOpen(false)}
+          onCreated={(group) => {
+            setVisibility("group");
+            setSelectedGroupId(group.id);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

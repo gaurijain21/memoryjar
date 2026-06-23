@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Copy, Check, Link2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { createGroup } from "@/lib/groups";
@@ -8,9 +9,10 @@ import { trackButtonClick, trackGroupCreated } from "@/lib/analytics";
 
 interface CreateGroupModalProps {
   onClose: () => void;
+  onCreated?: (group: { id: string; joinCode: string; name: string }) => void;
 }
 
-export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
+export function CreateGroupModal({ onClose, onCreated }: CreateGroupModalProps) {
   const { user, setViewMode } = useApp();
   const [groupName, setGroupName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -35,7 +37,13 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
         { name: groupName.trim() }
       );
       trackGroupCreated(group.id);
-      setCreatedGroup({ id: group.id, joinCode: group.joinCode, name: groupName.trim() });
+      const created = { id: group.id, joinCode: group.joinCode, name: groupName.trim() };
+      if (onCreated) {
+        onCreated(created);
+        onClose();
+        return;
+      }
+      setCreatedGroup(created);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create group");
     } finally {
@@ -76,9 +84,15 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
     onClose();
   };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="group-modal" onClick={(e) => e.stopPropagation()}>
+  const modal = (
+    <div
+      className="modal-overlay group-modal-overlay"
+      onMouseDown={(event) => {
+        event.stopPropagation();
+        onClose();
+      }}
+    >
+      <div className="group-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="group-modal-header">
           <h2>{createdGroup ? "Group Created!" : "Create a Group"}</h2>
           <button className="icon-button" onClick={onClose} type="button" aria-label="Close">
@@ -89,7 +103,7 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
         {!createdGroup ? (
           <>
             <p className="group-modal-description">
-              Create a group to share memories with friends and family.
+              Start a shared memory space.
             </p>
 
             <label className="group-input-label">
@@ -155,4 +169,7 @@ export function CreateGroupModal({ onClose }: CreateGroupModalProps) {
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(modal, document.body);
 }

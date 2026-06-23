@@ -221,124 +221,127 @@ export function LeftSidebar({
         </div>
       </div>
 
-      <nav className="sidebar-nav" aria-label="Memory Jar">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button className={`sidebar-nav-item ${item.active ? "active" : ""}`} key={item.label} onClick={item.onClick} type="button">
-              <Icon size={18} />
-              <span>{item.label}</span>
+      <div className="memoryjar-sidebar-scroll">
+        <nav className="sidebar-nav" aria-label="Memory Jar">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button className={`sidebar-nav-item ${item.active ? "active" : ""}`} key={item.label} onClick={item.onClick} type="button">
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <section className="sidebar-section">
+          <div className="section-heading">
+            <span>Your Groups</span>
+            <button
+              aria-label="Create group"
+              onClick={() => {
+                if (!user) {
+                  requestLogin({ type: "create-group" });
+                  return;
+                }
+                setIsCreateGroupOpen(true);
+              }}
+              type="button"
+            >
+              <Plus size={15} />
             </button>
-          );
-        })}
-      </nav>
-
-      <section className="sidebar-section">
-        <div className="section-heading">
-          <span>Your Groups</span>
-          <button
-            aria-label="Create group"
-            onClick={() => {
-              if (!user) {
-                requestLogin({ type: "create-group" });
-                return;
-              }
-              setIsCreateGroupOpen(true);
-            }}
-            type="button"
-          >
-            <Plus size={15} />
-          </button>
-        </div>
-        {groups.length ? (
-          <div className="sidebar-groups">
-            {groups.slice(0, 4).map((group, index) => {
-              const members = Object.values(group.members ?? {});
-              const isSelected = activePage === "main" && viewMode === `group-${group.id}`;
-              return (
-                <button
-                  className={`sidebar-group-card ${isSelected ? "active" : ""}`}
-                  key={group.id}
-                  onClick={() => {
-                    setViewMode(`group-${group.id}`);
-                    setCurrentPage("main");
-                  }}
-                  type="button"
-                >
-                  <div className={`group-thumb group-thumb-${index + 1}`}>
-                    {members[0]?.photoURL ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img alt="" src={members[0].photoURL} />
-                    ) : (
-                      <span>{group.name.slice(0, 1)}</span>
-                    )}
-                  </div>
-                  <div>
-                    <strong>{group.name}</strong>
-                    <small>{group.memberIds.length} members</small>
-                  </div>
-                </button>
-              );
-            })}
           </div>
-        ) : (
-          <p className="sidebar-empty">No groups yet.</p>
-        )}
-      </section>
+          {groups.length ? (
+            <div className="sidebar-groups">
+              {groups.map((group, index) => {
+                const members = Object.values(group.members ?? {});
+                const isSelected = activePage === "main" && viewMode === `group-${group.id}`;
+                const initial = group.name.trim().slice(0, 1).toUpperCase() || "G";
+                return (
+                  <button
+                    className={`sidebar-group-card ${isSelected ? "active" : ""}`}
+                    key={group.id}
+                    onClick={() => {
+                      setViewMode(`group-${group.id}`);
+                      setCurrentPage("main");
+                    }}
+                    type="button"
+                  >
+                    <div className={`group-thumb group-thumb-${index + 1}`}>
+                      {members[0]?.photoURL ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img alt="" src={members[0].photoURL} />
+                      ) : (
+                        <span>{initial}</span>
+                      )}
+                    </div>
+                    <div>
+                      <strong>{group.name}</strong>
+                      <small>{group.memberIds.length} members</small>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="sidebar-empty">No groups yet.</p>
+          )}
+        </section>
 
-      <section className={`memory-streak-card ${streakDays === 0 ? "empty" : ""}`}>
-        <Flame size={22} fill="currentColor" />
-        <strong>Memory Streak</strong>
-        {streakDays > 0 ? (
-          <>
-            <p><b>{streakDays}</b> days in a row</p>
-            <small>Keep capturing!</small>
-          </>
-        ) : (
-          <>
-            <p>Start a streak</p>
-            <button className="streak-add-button" onClick={onAddMemory} type="button">Add Memory</button>
-          </>
-        )}
-        <div className="streak-dots" aria-hidden="true">
-          {Array.from({ length: 7 }).map((_, index) => (
-            <span className={index < Math.min(7, streakDays) ? "complete" : ""} key={index} />
-          ))}
-        </div>
-      </section>
+        <section className={`memory-streak-card ${streakDays === 0 ? "empty" : ""}`}>
+          <Flame size={22} fill="currentColor" />
+          <strong>Memory Streak</strong>
+          {streakDays > 0 ? (
+            <>
+              <p><b>{streakDays}</b> days in a row</p>
+              <small>Keep capturing!</small>
+            </>
+          ) : (
+            <>
+              <p>Start a streak</p>
+              <button className="streak-add-button" onClick={onAddMemory} type="button">Add Memory</button>
+            </>
+          )}
+          <div className="streak-dots" aria-hidden="true">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <span className={index < Math.min(7, streakDays) ? "complete" : ""} key={index} />
+            ))}
+          </div>
+        </section>
 
-      <div className="sidebar-profile">
-        <UserAvatar className="sidebar-profile-avatar" email={user?.email} id={user?.uid} name={user?.displayName} photoURL={user?.photoURL} />
-        <div>
-          <strong>{user?.displayName || user?.email?.split("@")[0] || "Guest Explorer"}</strong>
-          <small>{user?.email || "Sign in to save memories"}</small>
+        <div className="sidebar-profile">
+          <UserAvatar className="sidebar-profile-avatar" email={user?.email} id={user?.uid} name={user?.displayName} photoURL={user?.photoURL} />
+          <div>
+            <strong>{user?.displayName || user?.email?.split("@")[0] || "Guest Explorer"}</strong>
+            <small>{user?.email || "Sign in to save memories"}</small>
+          </div>
+          {user ? (
+            <button
+              aria-label="Sign out"
+              onClick={() => {
+                clearInviteCode();
+                void signOut(auth);
+              }}
+              type="button"
+            >
+              <LogOut size={16} />
+            </button>
+          ) : (
+            <button aria-label="Sign in" onClick={() => requestLogin(null)} type="button">
+              <User size={16} />
+            </button>
+          )}
         </div>
-        {user ? (
-          <button
-            aria-label="Sign out"
-            onClick={() => {
-              clearInviteCode();
-              void signOut(auth);
-            }}
-            type="button"
-          >
-            <LogOut size={16} />
-          </button>
-        ) : (
-          <button aria-label="Sign in" onClick={() => requestLogin(null)} type="button">
-            <User size={16} />
-          </button>
-        )}
+
+        <button
+          className="theme-toggle"
+          onClick={() => onThemeChange(theme === "light" ? "dark" : "light")}
+          type="button"
+        >
+          {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
+          <span>{theme === "light" ? "Dark mode" : "Light mode"}</span>
+        </button>
       </div>
-
-      <button
-        className="theme-toggle"
-        onClick={() => onThemeChange(theme === "light" ? "dark" : "light")}
-        type="button"
-      >
-        {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
-        <span>{theme === "light" ? "Dark mode" : "Light mode"}</span>
-      </button>
 
       {isCreateGroupOpen ? <CreateGroupModal onClose={() => setIsCreateGroupOpen(false)} /> : null}
     </aside>
@@ -449,7 +452,7 @@ export function SelectedMemoryPanel({ memory, onClose }: SelectedMemoryPanelProp
   return (
     <section className="selected-memory-panel">
       <div className="panel-heading">
-        <h2>Memory Details</h2>
+        <h2>{memory.title || "Untitled memory"}</h2>
         <button aria-label="Close memory details" onClick={onClose} type="button"><X size={16} /></button>
       </div>
       <div className="selected-memory-photo">
@@ -499,13 +502,12 @@ export function SelectedMemoryPanel({ memory, onClose }: SelectedMemoryPanelProp
         ) : null}
       </div>
       <div className="selected-memory-copy">
+        {getLocation(memory) ? <p>{getLocation(memory)}</p> : null}
+        {memory.date ? <small>{formatMemoryDate(memory.date, "long")}</small> : null}
         <span className="vibe-badge">
           <Sparkles size={13} />
           {getVibeLabel(memory)}
         </span>
-        <h2>{memory.title || "Untitled memory"}</h2>
-        {getLocation(memory) ? <p>{getLocation(memory)}</p> : null}
-        {memory.date ? <small>{formatMemoryDate(memory.date, "long")}</small> : null}
         {memory.description ? <div className="selected-description">{memory.description}</div> : null}
         {memory.groupId ? (
           <button
@@ -513,7 +515,7 @@ export function SelectedMemoryPanel({ memory, onClose }: SelectedMemoryPanelProp
             onClick={() => {
               if (!memory.groupId) return;
               setViewMode(`group-${memory.groupId}`);
-              setCurrentPage("edit-memories");
+              setCurrentPage("main");
             }}
             type="button"
           >
@@ -529,7 +531,7 @@ export function SelectedMemoryPanel({ memory, onClose }: SelectedMemoryPanelProp
         />
         <Link className="expanded-view-button light" href={getMemoryExpandedHref(memory)} target="_blank" rel="noopener noreferrer">
           <Eye size={15} />
-          Expand
+          Open full memory ✨
         </Link>
       </div>
     </section>

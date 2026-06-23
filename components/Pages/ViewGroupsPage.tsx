@@ -200,16 +200,6 @@ export function ViewGroupsPage({ embedded = false }: ViewGroupsPageProps) {
                       </button>
                       <button
                         className="group-action-button"
-                        onClick={() => {
-                          setError(null);
-                          setExpandedGroupId(group.id);
-                        }}
-                        type="button"
-                      >
-                        Edit Members
-                      </button>
-                      <button
-                        className="group-action-button"
                         onClick={() => handleCopyLink(group)}
                         type="button"
                       >

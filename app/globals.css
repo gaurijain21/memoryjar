@@ -895,7 +895,7 @@ h2 {
 }
 
 .modal-title-row {
-  align-items: start;
+  align-items: flex-start;
 }
 
 .modal-title-row h2 {
@@ -5517,7 +5517,7 @@ body {
 }
 
 .visibility-card {
-  align-items: start;
+  align-items: flex-start;
   background: rgba(5, 7, 12, 0.44);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 15px;
@@ -7070,7 +7070,7 @@ body {
 }
 
 .timeline-layout {
-  align-items: start;
+  align-items: flex-start;
   display: grid;
   gap: 22px;
   grid-template-columns: minmax(0, 1fr) minmax(96px, 9vw);
@@ -7979,7 +7979,7 @@ body {
 }
 
 .landing-section {
-  align-items: start;
+  align-items: flex-start;
   background: rgba(255, 250, 246, 0.76);
   border-top: 1px solid rgba(96, 74, 64, 0.09);
   display: grid;
@@ -9519,5 +9519,608 @@ body {
   .map-floating-rail .live-activity-card {
     min-height: 220px !important;
     width: min(330px, calc(100vw - 28px)) !important;
+  }
+}
+
+/* Overflow, dark mode, and form readability fixes. */
+.memoryjar-sidebar {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+}
+
+.memoryjar-sidebar *,
+.memoryjar-sidebar *::before,
+.memoryjar-sidebar *::after {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.sidebar-section,
+.sidebar-groups,
+.sidebar-group-card,
+.sidebar-profile,
+.memory-streak-card {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.sidebar-groups {
+  padding-right: 2px;
+}
+
+.sidebar-group-card {
+  grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
+}
+
+.sidebar-group-card > div:last-child,
+.sidebar-profile > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar-group-card strong,
+.sidebar-group-card small,
+.sidebar-profile strong,
+.sidebar-profile small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-thumb {
+  flex: 0 0 38px;
+  text-transform: uppercase;
+}
+
+.memory-streak-card {
+  align-content: start;
+  padding: 18px;
+}
+
+.memory-streak-card p,
+.memory-streak-card small,
+.memory-streak-card strong {
+  max-width: calc(100% - 34px);
+  overflow-wrap: anywhere;
+}
+
+.streak-dots {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.streak-dots span {
+  flex: 0 0 18px;
+  height: 18px;
+  width: 18px;
+}
+
+.memoryjar-layout .premium-add-memory,
+.memoryjar-layout .add-memory-button,
+.memoryjar-layout .primary-add-button,
+.memoryjar-layout .save-memory-button,
+.memoryjar-layout .streak-add-button,
+.join-card .primary-button {
+  background: linear-gradient(135deg, #a653ff, #6257f4) !important;
+  color: #fff !important;
+}
+
+.social-memory-modal {
+  color: #171827 !important;
+}
+
+.social-memory-modal .memory-section-header h3 {
+  color: #171827 !important;
+}
+
+.social-memory-modal label > span,
+.social-memory-modal .terms-row span,
+.social-memory-modal .terms-links,
+.social-memory-modal .section-helper {
+  color: #3f4759 !important;
+}
+
+.social-memory-modal .terms-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  line-height: 1.35;
+}
+
+.social-memory-modal .terms-row input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.social-memory-modal .terms-links {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin: -8px 0 0 34px;
+}
+
+.social-memory-modal .terms-links a {
+  color: #7659e8 !important;
+  font-weight: 850;
+}
+
+.social-memory-modal .visibility-card {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(130, 104, 218, 0.16) !important;
+  color: #202436 !important;
+}
+
+.social-memory-modal .visibility-card strong,
+.social-memory-modal .visibility-card span,
+.social-memory-modal .visibility-card svg {
+  color: #202436 !important;
+}
+
+.social-memory-modal .visibility-card.active {
+  background: linear-gradient(135deg, rgba(166, 83, 255, 0.18), rgba(255, 111, 178, 0.18)) !important;
+  border-color: rgba(166, 83, 255, 0.36) !important;
+  box-shadow: 0 16px 30px rgba(166, 83, 255, 0.14);
+}
+
+.memoryjar-layout .map-floating-rail .live-activity-card {
+  bottom: clamp(18px, 2vw, 28px) !important;
+  left: clamp(18px, 2vw, 28px) !important;
+  right: auto !important;
+}
+
+:root[data-memoryjar-theme="dark"] {
+  --mj-bg: #0e1220;
+  --mj-panel: rgba(25, 29, 44, 0.94);
+  --mj-panel-solid: #191d2c;
+  --mj-line: rgba(255, 255, 255, 0.13);
+  --mj-text: #f8f6ff;
+  --mj-muted: #b8bfd2;
+  --mj-surface: rgba(25, 29, 44, 0.94);
+  --mj-surface-strong: #191d2c;
+  --mj-border: rgba(255, 255, 255, 0.13);
+}
+
+:root[data-memoryjar-theme="dark"] body,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout,
+:root[data-memoryjar-theme="dark"] .memoryjar-main-shell,
+:root[data-memoryjar-theme="dark"] .workspace-page,
+:root[data-memoryjar-theme="dark"] .embedded-page {
+  background: #0e1220 !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-sidebar,
+:root[data-memoryjar-theme="dark"] .selected-memory-panel,
+:root[data-memoryjar-theme="dark"] .live-activity-card,
+:root[data-memoryjar-theme="dark"] .map-legend,
+:root[data-memoryjar-theme="dark"] .recent-drawer,
+:root[data-memoryjar-theme="dark"] .timeline-card,
+:root[data-memoryjar-theme="dark"] .timeline-memory-card,
+:root[data-memoryjar-theme="dark"] .group-card,
+:root[data-memoryjar-theme="dark"] .group-row-card,
+:root[data-memoryjar-theme="dark"] .memory-edit-card,
+:root[data-memoryjar-theme="dark"] .sidebar-profile,
+:root[data-memoryjar-theme="dark"] .workspace-page,
+:root[data-memoryjar-theme="dark"] .embedded-page,
+:root[data-memoryjar-theme="dark"] .social-memory-modal {
+  background: rgba(25, 29, 44, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-layout h1,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout h2,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout h3,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout h4,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout strong,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout label,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout button,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .section-heading span,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .sidebar-brand h1,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .sidebar-group-card strong,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .sidebar-profile strong,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .panel-heading h2,
+:root[data-memoryjar-theme="dark"] .social-memory-modal h2,
+:root[data-memoryjar-theme="dark"] .social-memory-modal h3,
+:root[data-memoryjar-theme="dark"] .social-memory-modal label,
+:root[data-memoryjar-theme="dark"] .social-memory-modal strong,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .memory-section-header h3 {
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-layout p,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout small,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout span,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .sidebar-brand p,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .sidebar-group-card small,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .sidebar-profile small,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .activity-row small,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .timeline-card small,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .memory-edit-info span,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .memory-edit-info small,
+:root[data-memoryjar-theme="dark"] .social-memory-modal p,
+:root[data-memoryjar-theme="dark"] .social-memory-modal small,
+:root[data-memoryjar-theme="dark"] .social-memory-modal span,
+:root[data-memoryjar-theme="dark"] .social-memory-modal label > span,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .section-helper,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .terms-row span,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .terms-links {
+  color: #b8bfd2 !important;
+}
+
+:root[data-memoryjar-theme="dark"] .sidebar-nav-item {
+  color: #c4c9d8 !important;
+}
+
+:root[data-memoryjar-theme="dark"] .sidebar-nav-item.active,
+:root[data-memoryjar-theme="dark"] .sidebar-nav-item:hover,
+:root[data-memoryjar-theme="dark"] .sidebar-group-card.active strong {
+  color: #d8c8ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-layout input,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout textarea,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout select,
+:root[data-memoryjar-theme="dark"] .social-memory-modal input,
+:root[data-memoryjar-theme="dark"] .social-memory-modal textarea,
+:root[data-memoryjar-theme="dark"] .social-memory-modal select {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-layout input::placeholder,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout textarea::placeholder,
+:root[data-memoryjar-theme="dark"] .social-memory-modal input::placeholder,
+:root[data-memoryjar-theme="dark"] .social-memory-modal textarea::placeholder {
+  color: #9fa7ba !important;
+  opacity: 1;
+}
+
+:root[data-memoryjar-theme="dark"] .social-memory-modal .vibe-card,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .feeling-pill,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .visibility-card,
+:root[data-memoryjar-theme="dark"] .photo-picker,
+:root[data-memoryjar-theme="dark"] .selected-place-card {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .social-memory-modal .vibe-card span,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .vibe-card svg,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .visibility-card strong,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .visibility-card span,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .visibility-card svg,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .feeling-pill {
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .social-memory-modal .vibe-card.active,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .feeling-pill.active,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .visibility-card.active {
+  background: linear-gradient(135deg, #a653ff, #ff6fb2) !important;
+  color: #fff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .icon-button,
+:root[data-memoryjar-theme="dark"] .memoryjar-layout .panel-heading button,
+:root[data-memoryjar-theme="dark"] .social-memory-modal .icon-button,
+:root[data-memoryjar-theme="dark"] .group-action-button,
+:root[data-memoryjar-theme="dark"] .secondary-button {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .premium-add-memory,
+:root[data-memoryjar-theme="dark"] .add-memory-button,
+:root[data-memoryjar-theme="dark"] .primary-add-button,
+:root[data-memoryjar-theme="dark"] .save-memory-button,
+:root[data-memoryjar-theme="dark"] .streak-add-button,
+:root[data-memoryjar-theme="dark"] .primary-button {
+  background: linear-gradient(135deg, #a653ff, #6257f4) !important;
+  color: #fff !important;
+}
+
+@media (max-width: 760px) {
+  .memoryjar-sidebar {
+    overflow-x: hidden !important;
+  }
+}
+
+/* Dialog, portal, expanded view, and zoom-safe sidebar fixes. */
+.memoryjar-sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+
+.memoryjar-sidebar .sidebar-brand {
+  flex: 0 0 auto;
+}
+
+.memoryjar-sidebar-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.memoryjar-sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.memoryjar-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(126, 93, 236, 0.3);
+  border-radius: 999px;
+}
+
+.group-modal-overlay {
+  align-items: center !important;
+  background: rgba(16, 18, 30, 0.42) !important;
+  display: flex !important;
+  inset: 0 !important;
+  justify-content: center !important;
+  padding: clamp(18px, 4vw, 48px) !important;
+  position: fixed !important;
+  z-index: 260 !important;
+}
+
+.group-modal {
+  background: #fff !important;
+  border: 1px solid rgba(119, 96, 210, 0.14) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 28px 90px rgba(29, 35, 64, 0.28) !important;
+  color: #171827 !important;
+  display: grid;
+  gap: 18px;
+  max-width: 440px;
+  padding: clamp(22px, 4vw, 34px) !important;
+  width: min(100%, 440px);
+}
+
+.group-modal-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.group-modal-header h2 {
+  color: #171827 !important;
+  font-size: 1.55rem;
+  font-weight: 900;
+  margin: 0;
+}
+
+.group-modal-description {
+  color: #596276 !important;
+  font-size: 0.96rem;
+  line-height: 1.5;
+  margin: -6px 0 0;
+}
+
+.group-input-label {
+  display: grid;
+  gap: 8px;
+}
+
+.group-input-label span {
+  color: #30374a !important;
+  font-weight: 850;
+}
+
+.group-input-label input,
+.group-modal .join-link-input {
+  background: #fff !important;
+  border: 1px solid rgba(92, 101, 130, 0.22) !important;
+  border-radius: 16px !important;
+  color: #171827 !important;
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.group-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.group-modal .primary-button {
+  background: linear-gradient(135deg, #a653ff, #6257f4) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  color: #fff !important;
+  min-height: 46px;
+  padding: 0 20px;
+}
+
+.group-modal .secondary-button {
+  background: rgba(108, 92, 231, 0.08) !important;
+  border: 1px solid rgba(108, 92, 231, 0.14) !important;
+  border-radius: 999px !important;
+  color: #4f46c8 !important;
+  min-height: 46px;
+  padding: 0 18px;
+}
+
+.selected-memory-panel .panel-heading h2 {
+  color: var(--mj-text) !important;
+  font-size: clamp(1.15rem, 1.8vw, 1.45rem);
+  line-height: 1.15;
+  max-width: calc(100% - 48px);
+  overflow-wrap: anywhere;
+}
+
+.selected-memory-panel .selected-memory-photo {
+  margin-top: 0;
+}
+
+.expanded-view-button,
+.expanded-view-button.light {
+  align-items: center;
+  background: linear-gradient(135deg, #a653ff, #ff6fb2) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  box-shadow: 0 14px 28px rgba(166, 83, 255, 0.24);
+  color: #fff !important;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.expanded-view-button svg,
+.expanded-view-button * {
+  color: #fff !important;
+}
+
+.expanded-memory-view {
+  background: #f8f6ff !important;
+  color: #171827 !important;
+  min-height: 100vh;
+}
+
+.expanded-memory-details {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(92, 101, 130, 0.15) !important;
+  color: #171827 !important;
+  overflow-y: auto;
+}
+
+.expanded-memory-details h1 {
+  color: #171827 !important;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  line-height: 1.08;
+}
+
+.expanded-memory-details p,
+.expanded-memory-details span,
+.expanded-memory-details .detail-meta span {
+  color: #4d586d !important;
+}
+
+.expanded-memory-details .memory-reactions span,
+.expanded-memory-details .reaction-pill,
+.expanded-memory-details .reaction-picker-button {
+  color: #252a3b !important;
+}
+
+.expanded-gallery-arrow {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(72, 80, 110, 0.18) !important;
+  color: #24283a !important;
+}
+
+.expanded-gallery-arrow svg {
+  color: inherit !important;
+}
+
+:root[data-memoryjar-theme="dark"] .group-modal {
+  background: #191d2c !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .group-modal-header h2,
+:root[data-memoryjar-theme="dark"] .group-input-label span {
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .group-modal-description,
+:root[data-memoryjar-theme="dark"] .group-modal p {
+  color: #b8bfd2 !important;
+}
+
+:root[data-memoryjar-theme="dark"] .group-input-label input,
+:root[data-memoryjar-theme="dark"] .group-modal .join-link-input {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .group-modal .secondary-button {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-topbar .floating-select {
+  background: rgba(25, 29, 44, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-topbar .floating-select span,
+:root[data-memoryjar-theme="dark"] .memoryjar-topbar .floating-select svg {
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .memoryjar-topbar .premium-add-memory,
+:root[data-memoryjar-theme="dark"] .memoryjar-topbar .premium-add-memory span,
+:root[data-memoryjar-theme="dark"] .memoryjar-topbar .premium-add-memory svg {
+  color: #fff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-memory-view {
+  background: #0e1220 !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-memory-details {
+  background: #151927 !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-memory-details h1,
+:root[data-memoryjar-theme="dark"] .expanded-memory-details strong,
+:root[data-memoryjar-theme="dark"] .expanded-memory-details .reaction-picker-button,
+:root[data-memoryjar-theme="dark"] .expanded-memory-details .reaction-pill {
+  color: #f8f6ff !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-memory-details p,
+:root[data-memoryjar-theme="dark"] .expanded-memory-details span,
+:root[data-memoryjar-theme="dark"] .expanded-memory-details .detail-meta span {
+  color: #c1c7d8 !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-gallery {
+  background: #080b14 !important;
+}
+
+:root[data-memoryjar-theme="dark"] .expanded-gallery-arrow {
+  background: rgba(25, 29, 44, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #f8f6ff !important;
+}
+
+@media (max-width: 900px) {
+  .memoryjar-sidebar {
+    height: auto !important;
+    max-height: 42vh !important;
+  }
+
+  .memoryjar-sidebar-scroll {
+    overflow-y: auto;
   }
 }
