@@ -23,6 +23,7 @@ export type Memory = {
   vibes?: string[];
   feeling?: string | null;
   ownerId?: string;
+  creatorUid?: string;
   sourceMemoryId?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -70,7 +71,7 @@ export type GroupInput = {
 export type ViewMode = "all-memories" | "my-memories" | "everyone" | `group-${string}`;
 
 // Page types for internal navigation
-export type AppPage = "main" | "edit-memories" | "view-groups" | "personal-info";
+export type AppPage = "main" | "timeline" | "edit-memories" | "view-groups" | "personal-info";
 
 // Aggregate marker for "Everyone's Memories" view
 export type AggregateMarker = {

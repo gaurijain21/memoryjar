@@ -163,7 +163,7 @@ export default function JoinPage({ params }: JoinPageProps) {
   if (!group) return null;
 
   const admin = group.members?.[group.ownerId];
-  const adminName = admin?.displayName || admin?.email || "The group admin";
+  const adminName = admin?.displayName || admin?.email?.split("@")[0] || "Gauri";
 
   return (
     <main className="join-page">
@@ -179,8 +179,8 @@ export default function JoinPage({ params }: JoinPageProps) {
           <div className="join-invite-icon">
             <Users size={24} />
           </div>
-          <h2>{adminName} invited you to join {group.name}.</h2>
-          <p>If you know this person and want to join, accept the invite and sign in with Google.</p>
+          <h2>{adminName} invited you to join {group.name}</h2>
+          <p>Step into the shared memory map, add your favorite moments, and see the places your group is saving together.</p>
         </div>
 
         {error && <div className="join-error">{error}</div>}
@@ -191,7 +191,7 @@ export default function JoinPage({ params }: JoinPageProps) {
           disabled={isJoining}
           type="button"
         >
-          {isJoining ? "Joining..." : user ? "Accept invite" : "Sign in with Google to Join"}
+          {isJoining ? "Joining..." : "Accept invite"}
         </button>
         <button className="popup-test-button" onClick={() => router.push("/")} type="button">
           Not now

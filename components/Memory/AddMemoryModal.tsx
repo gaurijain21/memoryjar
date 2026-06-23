@@ -249,12 +249,17 @@ export function AddMemoryModal({
   };
 
   return (
-    <div className="drawer-layer">
-      <form className="memory-modal social-memory-modal" noValidate onSubmit={handleSubmit}>
+    <div className="drawer-layer" onMouseDown={onClose}>
+      <form
+        className="memory-modal social-memory-modal"
+        noValidate
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={handleSubmit}
+      >
         <div className="modal-title-row">
           <div>
             <p className="eyebrow">{editingMemory ? "Edit memory" : "Post a memory"}</p>
-            <h2>{editingMemory ? editingMemory.title : "Add a Memory ✨"}</h2>
+            <h2>{editingMemory ? editingMemory.title : "Add a Memory"}</h2>
           </div>
           <button aria-label="Close" className="icon-button" onClick={onClose} type="button">
             <X size={18} />
@@ -262,7 +267,7 @@ export function AddMemoryModal({
         </div>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<MapPin size={16} />} title="Add a location" />
+          <SectionHeader icon={<MapPin size={16} />} title="Where did this happen?" />
           <PlaceSearch
             className="drawer-place-search"
             onPlaceSelected={(location) => {
@@ -284,23 +289,23 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Sparkles size={16} />} title="What’s this memory?" />
+          <SectionHeader icon={<Sparkles size={16} />} title="What's this memory called?" />
           <label>
-            <span>Title</span>
+            <span>Give it a name</span>
             <input
               maxLength={70}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Give this memory a title…"
+              placeholder="Summer road trip, rooftop sunset, first day..."
               required
               value={title}
             />
           </label>
           <label>
-            <span>Description</span>
+            <span>Tell the story</span>
             <textarea
               maxLength={500}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Tell the story behind this moment…"
+              placeholder="What happened? Who was there? What made it stick?"
               rows={4}
               value={description}
             />
@@ -321,7 +326,7 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Zap size={16} />} title="What vibe does this memory give?" />
+          <SectionHeader icon={<Zap size={16} />} title="What's the vibe?" />
           <div className="vibe-grid">
             {defaultVibes.map(({ label, icon: Icon }) => (
               <button
@@ -354,11 +359,11 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<ImagePlus size={16} />} title="Add photos or videos" />
+          <SectionHeader icon={<ImagePlus size={16} />} title="Drop your favorite moments" />
           <p className="section-helper">{selectedFileCount}/10 files selected</p>
           <label className="photo-picker">
             <ImagePlus size={18} />
-            <span>{remainingFileSlots ? "Add media" : "Limit reached"}</span>
+            <span>{remainingFileSlots ? "Add photos or videos" : "Limit reached"}</span>
             <input
               accept="image/*,video/*"
               disabled={remainingFileSlots === 0}
@@ -410,7 +415,7 @@ export function AddMemoryModal({
         </section>
 
         <section className="memory-form-section">
-          <SectionHeader icon={<Smile size={16} />} title="How are you feeling?" />
+          <SectionHeader icon={<Smile size={16} />} title="How did it feel?" />
           <div className="feeling-grid">
             {defaultFeelings.map((item) => (
               <button

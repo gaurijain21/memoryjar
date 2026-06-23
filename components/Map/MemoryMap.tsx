@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GoogleMap, Marker, OverlayView, useJsApiLoader } from "@react-google-maps/api";
-import { Compass, LocateFixed, Minus, Plus } from "lucide-react";
+import { Compass, Heart, LocateFixed, Minus, Plus } from "lucide-react";
 import { getReadableLocationName } from "@/lib/locationText";
 import { getReactionKey, subscribeToReactionEvents } from "@/lib/reactions";
 import type { AggregateMarker, Memory, SelectedLocation, ViewMode } from "@/types/memory";
@@ -15,9 +15,17 @@ const worldBounds = {
   west: -180,
   east: 180,
 };
-const personalPinColor = "#f6c85f";
-const publicPinColor = "#3b82f6";
+const personalPinColor = "#9b68f2";
+const publicPinColor = "#f6c85f";
 const groupPinColors = ["#6cc7f5", "#8f7cff", "#3ddc97", "#ff8f70", "#d783ff", "#4fd1c5"];
+const ambientReactionEmojis = ["💜", "✨", "😍", "😂", "❤️", "🎉"];
+
+function createBurstId(baseId: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${baseId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 function getGroupPinColor(groupId?: string | null) {
   if (!groupId) return personalPinColor;
@@ -32,7 +40,8 @@ function getGroupPinColor(groupId?: string | null) {
 
 function getMemoryPinColor(memory: Memory) {
   if (memory.audience === "public" && !memory.groupId) return publicPinColor;
-  return getGroupPinColor(memory.groupId);
+  if (memory.groupId) return getGroupPinColor(memory.groupId);
+  return personalPinColor;
 }
 
 function getAggregateVariant(marker: AggregateMarker) {
@@ -47,6 +56,26 @@ function getAggregateVariant(marker: AggregateMarker) {
 
   if (variants.length > 1) return "mixed";
   return variants[0] ?? "private";
+}
+
+function getReactionScore(memory: Memory) {
+  const meta = memory as Memory & {
+    likeCount?: number;
+    likes?: number;
+    reactionCount?: number;
+    reactions?: Record<string, number>;
+  };
+  const reactionTotal = meta.reactions
+    ? Object.values(meta.reactions).reduce((total, value) => total + (typeof value === "number" ? value : 0), 0)
+    : 0;
+
+  return meta.reactionCount ?? meta.likeCount ?? meta.likes ?? reactionTotal ?? 0;
+}
+
+function getMemoryReactionLabel(memory: Memory) {
+  const score = getReactionScore(memory);
+  if (score > 0) return score;
+  return Math.max(3, (memory.title?.length ?? 3) + (memory.vibes?.length ?? 0));
 }
 
 type MemoryMapProps = {
@@ -83,12 +112,14 @@ export function MemoryMap({
   const reactionEventsInitializedRef = useRef(false);
   const [burstAggregateId, setBurstAggregateId] = useState<string | null>(null);
   const [reactionBursts, setReactionBursts] = useState<Array<{ id: string; emoji: string; lat: number; lng: number }>>([]);
+  const [mapTypeId, setMapTypeId] = useState<"roadmap" | "satellite">("roadmap");
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
     libraries,
   });
 
   const isEveryoneView = viewMode === "everyone";
+  const selectedGroupId = viewMode.startsWith("group-") ? viewMode.replace("group-", "") : null;
   const reactionTargets = useMemo(() => {
     const targets = new Map<string, { lat: number; lng: number }>();
     memories.forEach((memory) => {
@@ -119,7 +150,7 @@ export function MemoryMap({
         events.forEach((event) => {
           const target = reactionTargets.get(event.id);
           if (!target || !event.emoji) return;
-          const id = `${event.id}-${event.reactionAt || Date.now()}`;
+          const id = createBurstId(event.id);
           setReactionBursts((current) => [...current, { id, emoji: event.emoji, ...target }]);
           window.setTimeout(() => {
             setReactionBursts((current) => current.filter((burst) => burst.id !== id));
@@ -129,6 +160,22 @@ export function MemoryMap({
       (error) => console.warn("[MemoryJar reactions] map event listener failed", error),
     );
   }, [reactionTargets]);
+
+  useEffect(() => {
+    const applyTheme = (theme: string | null) => {
+      const nextMapType = theme === "dark" ? "satellite" : "roadmap";
+      setMapTypeId(nextMapType);
+      mapRef.current?.setMapTypeId(nextMapType);
+    };
+
+    applyTheme(window.localStorage.getItem("memoryjar-theme"));
+    const handleThemeChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ theme?: string }>).detail;
+      applyTheme(detail?.theme ?? "light");
+    };
+    window.addEventListener("memoryjar:theme-changed", handleThemeChange);
+    return () => window.removeEventListener("memoryjar:theme-changed", handleThemeChange);
+  }, []);
 
   useEffect(() => {
     if (!isEveryoneView) {
@@ -167,9 +214,48 @@ export function MemoryMap({
     };
   }, [isLoaded]);
 
+  const featuredGroupMemoryIds = useMemo(() => {
+    if (!selectedGroupId) return new Set<string>();
+    return new Set(
+      memories
+        .filter((memory) => memory.groupId === selectedGroupId && memory.photoUrls[0])
+        .slice()
+        .sort((first, second) => getReactionScore(second) - getReactionScore(first))
+        .slice(0, 3)
+        .map((memory) => memory.id),
+    );
+  }, [memories, selectedGroupId]);
+
+  useEffect(() => {
+    const targets = memories
+      .filter((memory) => memory.photoUrls[0])
+      .map((memory) => ({ lat: memory.lat, lng: memory.lng }));
+    if (targets.length === 0) return;
+
+    const showAmbientBursts = () => {
+      const shuffled = targets.slice().sort(() => Math.random() - 0.5).slice(0, 2);
+      shuffled.forEach((target, index) => {
+        const id = createBurstId(`ambient-${index}`);
+        const emoji = ambientReactionEmojis[Math.floor(Math.random() * ambientReactionEmojis.length)];
+        setReactionBursts((current) => [...current, { id, emoji, ...target }]);
+        window.setTimeout(() => {
+          setReactionBursts((current) => current.filter((burst) => burst.id !== id));
+        }, 4200);
+      });
+    };
+
+    const timeoutId = window.setTimeout(showAmbientBursts, 900);
+    const intervalId = window.setInterval(showAmbientBursts, 5200);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
+  }, [memories]);
+
   const markerItems = useMemo(() => {
     const grouped = new Map<string, Memory[]>();
     memories.forEach((memory) => {
+      if (featuredGroupMemoryIds.has(memory.id)) return;
       const key = `${memory.lat.toFixed(3)}:${memory.lng.toFixed(3)}`;
       grouped.set(key, [...(grouped.get(key) ?? []), memory]);
     });
@@ -191,7 +277,12 @@ export function MemoryMap({
         };
       });
     });
-  }, [memories]);
+  }, [featuredGroupMemoryIds, memories]);
+
+  const featuredGroupItems = useMemo(
+    () => memories.filter((memory) => featuredGroupMemoryIds.has(memory.id)),
+    [featuredGroupMemoryIds, memories],
+  );
 
   const focusMemory = useCallback(
     (memory: Memory) => {
@@ -312,7 +403,7 @@ export function MemoryMap({
           fullscreenControl: false,
           heading: 0,
           mapTypeControl: false,
-          mapTypeId: "roadmap",
+          mapTypeId,
           minZoom: 2,
           restriction: {
             latLngBounds: worldBounds,
@@ -324,6 +415,43 @@ export function MemoryMap({
           gestureHandling: "greedy",
         }}
       >
+        {featuredGroupItems.map((memory) => (
+          <OverlayView
+            getPixelPositionOffset={() => ({ x: 0, y: 0 })}
+            key={`featured-${memory.id}`}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            position={{ lat: memory.lat, lng: memory.lng }}
+          >
+            <article
+              className={`featured-memory-pin ${selectedMemory?.id === memory.id ? "active" : ""}`}
+              style={{ "--pin-color": getMemoryPinColor(memory) } as CSSProperties}
+            >
+              <button onClick={() => focusMemory(memory)} type="button">
+                <div className="featured-memory-image">
+                  {memory.photoUrls[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img alt="" src={memory.photoUrls[0]} />
+                  ) : (
+                    <span />
+                  )}
+                </div>
+                <div className="featured-memory-copy">
+                  <strong>{memory.title || "Untitled memory"}</strong>
+                  <small>{memory.date || "Saved memory"}</small>
+                  <span>
+                    <Heart size={11} fill="currentColor" />
+                    {getMemoryReactionLabel(memory)}
+                  </span>
+                </div>
+                <i className="featured-avatar-stack" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </i>
+              </button>
+            </article>
+          </OverlayView>
+        ))}
         {markerItems.map(({ memory, lat, lng }) => (
           <OverlayView
             getPixelPositionOffset={() => ({ x: 0, y: 0 })}
@@ -346,7 +474,21 @@ export function MemoryMap({
                 ) : (
                   <span />
                 )}
+                <b className="pin-reaction-count">
+                  <Heart size={10} fill="currentColor" />
+                  {getMemoryReactionLabel(memory)}
+                </b>
+                {memory.groupId || memory.audience === "public" ? (
+                  <i className="pin-avatar-stack" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </i>
+                ) : null}
               </button>
+              {selectedMemory?.id === memory.id ? (
+                <span className="pin-live-emoji pin-live-emoji-one" aria-hidden="true">✨</span>
+              ) : null}
             </div>
           </OverlayView>
         ))}
@@ -379,9 +521,16 @@ export function MemoryMap({
                       }`}
                       type="button"
                     >
+                      {marker.previewMemory?.photoUrls?.[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img alt="" src={marker.previewMemory.photoUrls[0]} />
+                      ) : null}
                       <span className="aggregate-count">{marker.count}</span>
                       {burstAggregateId === marker.id ? <span className="map-local-confetti" aria-hidden="true" /> : null}
                     </button>
+                    {selectedAggregate?.id === marker.id ? (
+                      <span className="pin-live-emoji pin-live-emoji-two" aria-hidden="true">💜</span>
+                    ) : null}
                   </div>
                 </OverlayView>
               );
@@ -406,7 +555,7 @@ export function MemoryMap({
           <OverlayView
             getPixelPositionOffset={() => ({ x: 0, y: 0 })}
             key={burst.id}
-            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            mapPaneName={OverlayView.FLOAT_PANE}
             position={{ lat: burst.lat, lng: burst.lng }}
           >
             <span className="map-reaction-float">{burst.emoji}</span>

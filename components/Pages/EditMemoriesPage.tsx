@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Calendar, MapPin, Trash2, Edit3, ImageIcon } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Trash2, Edit3, ImageIcon, Sparkles } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { formatMemoryDate } from "@/lib/formatDate";
 import { getReadableLocationName } from "@/lib/locationText";
@@ -10,7 +10,15 @@ import { subscribeToGroupMemories, deleteGroupMemory } from "@/lib/groups";
 import { trackEvent, trackMemoryDeleted } from "@/lib/analytics";
 import type { Memory } from "@/types/memory";
 
-export function EditMemoriesPage() {
+type EditMemoriesPageProps = {
+  embedded?: boolean;
+};
+
+function getVibe(memory: Memory) {
+  return memory.vibes?.[0] || memory.feeling || "Memory";
+}
+
+export function EditMemoriesPage({ embedded = false }: EditMemoriesPageProps) {
   const { user, isAuthLoading, viewMode, currentGroup, setCurrentPage, setMemoryToEdit } = useApp();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,16 +113,18 @@ export function EditMemoriesPage() {
     : "My Memories";
 
   return (
-    <div className="page-container">
+    <div className={`page-container ${embedded ? "embedded-page" : ""}`}>
       <div className="page-header">
-        <button 
-          className="back-button" 
-          onClick={handleBack} 
-          type="button"
-          aria-label="Back"
-        >
-          <ArrowLeft size={20} />
-        </button>
+        {!embedded ? (
+          <button 
+            className="back-button" 
+            onClick={handleBack} 
+            type="button"
+            aria-label="Back"
+          >
+            <ArrowLeft size={20} />
+          </button>
+        ) : null}
         <h1 className="page-title">{pageTitle}</h1>
       </div>
 
@@ -129,7 +139,7 @@ export function EditMemoriesPage() {
           <p>Add your first memory to get started.</p>
         </div>
       ) : (
-        <div className="memories-edit-list">
+        <div className={`memories-edit-list ${isGroupView ? "group-album-list" : ""}`}>
           {memories.map((memory) => {
             const locationName = getReadableLocationName(memory.locationName);
 
@@ -147,6 +157,10 @@ export function EditMemoriesPage() {
               </div>
               <div className="memory-edit-info">
                 <h3 className="memory-edit-title">{memory.title}</h3>
+                <span className="vibe-badge compact">
+                  <Sparkles size={13} />
+                  {getVibe(memory)}
+                </span>
                 <div className="memory-edit-meta">
                   <span>
                     <Calendar size={14} />

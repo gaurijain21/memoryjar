@@ -8,7 +8,11 @@ import { deleteGroup, leaveGroup, removeMember } from "@/lib/groups";
 import { trackButtonClick, trackEvent } from "@/lib/analytics";
 import type { Group } from "@/types/memory";
 
-export function ViewGroupsPage() {
+type ViewGroupsPageProps = {
+  embedded?: boolean;
+};
+
+export function ViewGroupsPage({ embedded = false }: ViewGroupsPageProps) {
   const { user, groups, setCurrentPage, setPendingAction, setViewMode } = useApp();
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -24,7 +28,6 @@ export function ViewGroupsPage() {
   const handleGroupMemories = (group: Group) => {
     trackEvent("group_memories_opened", { group_id: group.id });
     trackEvent("group_detail_view", { group_id: group.id });
-    sessionStorage.setItem("memoryJarPreviousPage", "view-groups");
     setViewMode(`group-${group.id}`);
     setCurrentPage("edit-memories");
   };
@@ -46,13 +49,6 @@ export function ViewGroupsPage() {
       setCopiedGroupId(group.id);
       setTimeout(() => setCopiedGroupId(null), 2000);
     }
-  };
-
-  const handleAddGroupMemory = (group: Group) => {
-    trackButtonClick("add_group_memory", "view_groups", { group_id: group.id });
-    setViewMode(`group-${group.id}`);
-    setCurrentPage("main");
-    setPendingAction({ type: "add-memory", groupId: group.id });
   };
 
   const handleLeave = async (group: Group) => {
@@ -127,19 +123,27 @@ export function ViewGroupsPage() {
   };
 
   return (
-    <div className="page-container">
+    <div className={`page-container ${embedded ? "embedded-page" : ""}`}>
       <div className="page-header">
-        <button 
-          className="back-button" 
-          onClick={() => {
-            setCurrentPage("main");
-          }} 
-          type="button"
-          aria-label="Back"
-        >
-          <ArrowLeft size={20} />
-        </button>
+        {!embedded ? (
+          <button 
+            className="back-button" 
+            onClick={() => {
+              setCurrentPage("main");
+            }} 
+            type="button"
+            aria-label="Back"
+          >
+            <ArrowLeft size={20} />
+          </button>
+        ) : null}
         <h1 className="page-title">Your Groups</h1>
+        {embedded ? (
+          <button className="primary-button light-primary" onClick={() => setPendingAction({ type: "create-group" })} type="button">
+            <Plus size={16} />
+            Create Group
+          </button>
+        ) : null}
       </div>
 
       {error && <div className="page-error">{error}</div>}
@@ -220,14 +224,6 @@ export function ViewGroupsPage() {
                             Copy Invite Link
                           </>
                         )}
-                      </button>
-                      <button
-                        className="group-action-button"
-                        onClick={() => handleAddGroupMemory(group)}
-                        type="button"
-                      >
-                        <Plus size={14} />
-                        Add Memory
                       </button>
                     </div>
 

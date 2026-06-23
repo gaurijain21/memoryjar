@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, ChevronLeft, ChevronRight, MapPin, Shield } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, MapPin, Sparkles, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MemoryReactions } from "@/components/Memory/MemoryReactions";
 import { useApp } from "@/contexts/AppContext";
@@ -25,10 +25,18 @@ export function ExpandedMemoryView({
   const photos = memory.photoUrls;
   const date = formatMemoryDate(memory.date, "long");
   const locationName = getReadableLocationName(memory.locationName);
+  const vibe = memory.vibes?.[0] || memory.feeling || "";
 
   useEffect(() => {
     setPhotoIndex(0);
   }, [memory.id]);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("memoryjar-theme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      document.documentElement.dataset.memoryjarTheme = savedTheme;
+    }
+  }, []);
 
   const floatEmoji = (emoji: string) => {
     const id = Date.now();
@@ -42,6 +50,12 @@ export function ExpandedMemoryView({
     <section className={`expanded-memory-view ${className}`}>
       <aside className="expanded-memory-details">
         <h1>{memory.title}</h1>
+        {vibe ? (
+          <span className="vibe-badge expanded-vibe">
+            <Sparkles size={14} />
+            {vibe}
+          </span>
+        ) : null}
         {memory.description ? <p>{memory.description}</p> : null}
         <div className="detail-meta">
           {date ? (
@@ -56,10 +70,12 @@ export function ExpandedMemoryView({
               {locationName}
             </span>
           ) : null}
-          <span>
-            <Shield size={15} />
-            {visibilityLabel}
-          </span>
+          {memory.groupId ? (
+            <span>
+              <Users size={15} />
+              Part of: {memory.groupName ?? visibilityLabel}
+            </span>
+          ) : null}
         </div>
         <MemoryReactions
           memory={memory}
