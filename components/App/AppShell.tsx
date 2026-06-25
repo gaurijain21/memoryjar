@@ -4,8 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { signOut } from "firebase/auth";
 import {
+  ArrowRight,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -15,7 +15,6 @@ import {
   Flame,
   Heart,
   Layers3,
-  LogOut,
   Map,
   Moon,
   Plus,
@@ -29,10 +28,8 @@ import { CreateGroupModal } from "@/components/Groups/CreateGroupModal";
 import { MemoryReactions } from "@/components/Memory/MemoryReactions";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useApp } from "@/contexts/AppContext";
-import { auth } from "@/lib/firebase";
 import { getMemoryExpandedHref } from "@/lib/expandedMemory";
 import { formatMemoryDate } from "@/lib/formatDate";
-import { clearInviteCode } from "@/lib/inviteStorage";
 import { getReadableLocationName } from "@/lib/locationText";
 import { getReactionSummary } from "@/lib/reactions";
 import type { AppPage, Group, Memory } from "@/types/memory";
@@ -44,6 +41,7 @@ type AppShellProps = {
   canAddMemory: boolean;
   memoriesForStreak: Memory[];
   onAddMemory: () => void;
+  showTopControls?: boolean;
 };
 
 type LeftSidebarProps = {
@@ -58,19 +56,6 @@ type LeftSidebarProps = {
 type TopMapControlsProps = {
   canAddMemory: boolean;
   onAddMemory: () => void;
-};
-
-type LiveActivityPanelProps = {
-  activities: LiveActivityItem[];
-};
-
-export type LiveActivityItem = {
-  id: string;
-  type: "memory" | "reaction";
-  memory: Memory;
-  emoji?: string;
-  actorLabel?: string;
-  isExiting?: boolean;
 };
 
 type RecentMemoriesDrawerProps = {
@@ -135,7 +120,7 @@ function calculateStreak(memories: Memory[]) {
   return count;
 }
 
-export function AppShell({ children, canAddMemory, memoriesForStreak, onAddMemory }: AppShellProps) {
+export function AppShell({ children, canAddMemory, memoriesForStreak, onAddMemory, showTopControls = true }: AppShellProps) {
   const { currentPage, groups } = useApp();
   const [theme, setTheme] = useState<MemoryJarTheme>("light");
   const streakDays = useMemo(() => calculateStreak(memoriesForStreak), [memoriesForStreak]);
@@ -162,7 +147,7 @@ export function AppShell({ children, canAddMemory, memoriesForStreak, onAddMemor
         theme={theme}
       />
       <section className="memoryjar-main-shell">
-        <TopMapControls canAddMemory={canAddMemory} onAddMemory={onAddMemory} />
+        {showTopControls ? <TopMapControls canAddMemory={canAddMemory} onAddMemory={onAddMemory} /> : null}
         {children}
       </section>
     </main>
@@ -309,7 +294,7 @@ export function LeftSidebar({
           ) : (
             <>
               <p>Start a streak</p>
-              <button className="streak-add-button" onClick={onAddMemory} type="button">Add Memory</button>
+              <small>A little streak starts with one saved place.</small>
             </>
           )}
           <div className="streak-dots" aria-hidden="true">
@@ -333,14 +318,13 @@ export function LeftSidebar({
           </div>
           {user ? (
             <button
-              aria-label="Sign out"
+              aria-label="Open personal information"
               onClick={() => {
-                clearInviteCode();
-                void signOut(auth);
+                setCurrentPage("personal-info");
               }}
               type="button"
             >
-              <LogOut size={16} />
+              <ArrowRight size={16} />
             </button>
           ) : (
             <button aria-label="Sign in" onClick={() => requestLogin(null)} type="button">
@@ -394,49 +378,6 @@ export function TopMapControls({ canAddMemory, onAddMemory }: TopMapControlsProp
         <span>Add Memory</span>
       </button>
     </header>
-  );
-}
-
-export function LiveActivityPanel({ activities }: LiveActivityPanelProps) {
-  return (
-    <section className="live-activity-card">
-      <div className="panel-heading">
-        <h2>Live Activity</h2>
-        <span>{activities.length} updates</span>
-      </div>
-      <div className="activity-list rolling-feed">
-        {activities.length ? activities.map((activity) => (
-          <article className={`activity-row ${activity.isExiting ? "exiting" : "entering"}`} key={activity.id}>
-            <div>
-              <p>
-                {activity.type === "reaction"
-                  ? activity.memory.groupId
-                    ? `${activity.actorLabel || "Someone"} reacted ${activity.emoji || ""} in ${activity.memory.groupName ?? "your group"}`
-                    : activity.memory.ownerId
-                      ? `${activity.actorLabel || "Someone"} reacted ${activity.emoji || ""} to your memory`
-                      : `${activity.actorLabel || "Someone"} reacted ${activity.emoji || ""}`
-                  : activity.memory.groupName
-                    ? `${activity.memory.groupName} added ${activity.memory.title}`
-                    : `Memory added in ${getLocation(activity.memory) || "a saved place"}`}
-              </p>
-              <small>{activity.type === "reaction" ? "Just now" : formatMemoryDate(activity.memory.date)}</small>
-            </div>
-            {getPhoto(activity.memory) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img alt="" src={getPhoto(activity.memory) ?? ""} />
-            ) : null}
-            {activity.type === "reaction" && activity.emoji ? (
-              <span className="live-activity-emoji-layer" aria-hidden="true">
-                <span className="live-activity-emoji-float live-activity-emoji-float-one">{activity.emoji}</span>
-                <span className="live-activity-emoji-float live-activity-emoji-float-two">{activity.emoji}</span>
-              </span>
-            ) : null}
-          </article>
-        )) : (
-          <div className="activity-empty">Activity will appear here as memories are added.</div>
-        )}
-      </div>
-    </section>
   );
 }
 

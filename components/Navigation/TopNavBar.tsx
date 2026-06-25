@@ -2,12 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { Plus, ChevronDown, User, Users, Edit3, LogOut } from "lucide-react";
-import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { Plus, ChevronDown, User, Users, Edit3 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
-import { clearInviteCode } from "@/lib/inviteStorage";
 import { ViewModeDropdown } from "./ViewModeDropdown";
 import { CreateGroupModal } from "@/components/Groups/CreateGroupModal";
 import { trackButtonClick, trackEvent } from "@/lib/analytics";
@@ -54,15 +51,8 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
     setPendingAction(null);
   }, [pendingAction, setPendingAction, user]);
 
-  const handleProfileAction = (action: "personal-info" | "view-groups" | "edit-memories" | "logout") => {
+  const handleProfileAction = (action: "personal-info" | "view-groups" | "edit-memories") => {
     setIsProfileMenuOpen(false);
-    
-    if (action === "logout") {
-      trackEvent("logout_clicked", { page: "top_ribbon" });
-      clearInviteCode();
-      signOut(auth);
-      return;
-    }
 
     if (!user) {
       requestLogin({ type: action });
@@ -209,15 +199,6 @@ export function TopNavBar({ onAddMemory, canAddMemory }: TopNavBarProps) {
               >
                 <Edit3 size={16} />
                 <span>Edit Memories</span>
-              </button>
-              <div className="profile-menu-divider" />
-              <button
-                className="profile-menu-item profile-menu-item-danger"
-                onClick={() => handleProfileAction("logout")}
-                type="button"
-              >
-                <LogOut size={16} />
-                <span>Sign Out</span>
               </button>
             </div>
           )}
